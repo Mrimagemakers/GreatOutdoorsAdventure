@@ -2,24 +2,113 @@
   "packages": [
     {
       "id": "goa-sketchfab-pines-v1",
-      "version": 1,
+      "version": 2,
       "license": "CC-BY-4.0",
       "source": "https://sketchfab.com/3d-models/pine-trees-pack-lowpoly-game-ready-lods-e1e9c07b8e2e445c943fec660beefba2",
       "sourceSha256": "5471eebff730c7d60bf073d9a63b31a02e0f3e411d103b7e7332d3459b4b15f0",
       "files": [
         {
           "path": "pine-forest-lod2.glb",
-          "sha256": "758efff8a73f2aa135df8d8d41a3e5d56d09b1f373bc2b636d1a952b6fc335cb",
-          "bytes": 15296804,
+          "sha256": "f4112ac5fed1902dab54b4adafe3fbc737b9c2e58da930da5902a110f7aaef0a",
+          "bytes": 7151432,
           "triangles": 4567
         },
         {
           "path": "ATTRIBUTION.txt",
-          "sha256": "0fba29cb6a2641827269947a7bf607a1aa91a10f9aca02de7a82e9c75538aeae",
-          "bytes": 456
+          "sha256": "0453c6ca5af2438e5040e953edbaaba91a0c95a950aeac2cca5b2b3c6c59490b",
+          "bytes": 466
         }
       ],
-      "verification": "SHA-256 bytes verified; runtime rendering checked separately"
+      "verification": "Rebuilt from the source pack (sourceSha256) on 2026-11-06; runtime rendering checked"
+    },
+    {
+      "id": "goa-ground-textures-v2",
+      "version": 2,
+      "license": "CC0-1.0 (Poly Haven: dry_ground_rocks, asphalt_snow); other colour maps supplied by project owner; generated normal maps original",
+      "source": "https://polyhaven.com",
+      "files": [
+        {
+          "path": "asphalt.jpg",
+          "sha256": "e54e22a35678725555ee3e6f4527decd28b4f369c1a4da60261fc6d6e60d5d4c",
+          "bytes": 384684
+        },
+        {
+          "path": "asphalt_n.jpg",
+          "sha256": "97f66456a0e5fe4cb225d5dd5347b998a9fd06c219a407f99186ba462626a65b",
+          "bytes": 394302
+        },
+        {
+          "path": "dirt.jpg",
+          "sha256": "9db691b818e7d2a4e564bae684ad08a4cbeb30f83d1f2551aee14399af39aab3",
+          "bytes": 460145
+        },
+        {
+          "path": "dirt_n.jpg",
+          "sha256": "7afa4582f0915649d2c04f662aa49bf94e631c010d0e35f9a403d459b129ebcb",
+          "bytes": 400138
+        },
+        {
+          "path": "grass_dry.jpg",
+          "sha256": "284b254b153d1291e6c69f196e0e1acffbc4a2bed159730b480204cb914bd843",
+          "bytes": 400394
+        },
+        {
+          "path": "grass_dry_n.jpg",
+          "sha256": "5afc5952f58b27a0b9fef6a9e7cbfbd15ec371a17014b8e3205a2284112d6286",
+          "bytes": 441634
+        },
+        {
+          "path": "grass_green.jpg",
+          "sha256": "c0bf5e3ac2755cc94185d219f0edfdb9e62ba053d730196285a14798b4917d9f",
+          "bytes": 404380
+        },
+        {
+          "path": "grass_green_n.jpg",
+          "sha256": "00af07f757b55d80a9ed0fd7128696547512522dd9c63f1d9191d799d4bccf5e",
+          "bytes": 432276
+        },
+        {
+          "path": "gravel.jpg",
+          "sha256": "911546b20bc6180fc3782d25bb3d9363993bafef55a4d6cac6eaa1420fec8308",
+          "bytes": 108885
+        },
+        {
+          "path": "gravel_n.jpg",
+          "sha256": "0ff7b61d65f8075c8b7e44ee2c3dfcf8639bcbb865ca1721fec8d2e1cc7c0a69",
+          "bytes": 411158
+        },
+        {
+          "path": "rock.jpg",
+          "sha256": "e82615259fe8939a366e8c6f06b3fd1a29f115798e49502b730c2c6489903241",
+          "bytes": 404220
+        },
+        {
+          "path": "rock_n.jpg",
+          "sha256": "66264395f9ca52ddceed7205b8f553a346ce0cccda6a970a08ac10dc4dd77032",
+          "bytes": 426739
+        },
+        {
+          "path": "snow.jpg",
+          "sha256": "67bdbc5634be13f6fe66f667bad4393e6f1070152d7dec6c6f5b95fda6f4077c",
+          "bytes": 52185
+        },
+        {
+          "path": "snow_n.jpg",
+          "sha256": "b55ef845682490d1af9c8200c628cf7ede8a3883c0ab4b97d54d9681151b6b0f",
+          "bytes": 252942
+        },
+        {
+          "path": "snowroad.jpg",
+          "sha256": "a6f973f69a1a529a345fe65e8c5fbe002b78bac8dce3f256da5da95ce34e1cf6",
+          "bytes": 464864
+        },
+        {
+          "path": "snowroad_n.jpg",
+          "sha256": "2b8141b6fd603f4beae6c531a87ba403f8c31631a719f60f16f6c14fdf631e96",
+          "bytes": 445817
+        }
+      ],
+      "verification": "SHA-256 recorded at commit"
     }
   ]
 }
