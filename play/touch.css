@@ -56,10 +56,10 @@ body.drive-menu-open #foot-touch,body.xr-active #foot-touch{display:none!importa
 #ft-swap{right:calc(max(14px,env(safe-area-inset-right)) + 182px*var(--ts));bottom:calc(max(18px,env(safe-area-inset-bottom)) + 20px)}
 #ft-car{right:max(14px,env(safe-area-inset-right));bottom:calc(max(18px,env(safe-area-inset-bottom)) + 170px*var(--ts))}
 /* move the on-foot HUD out of the thumbs' way */
-body.touch.on-foot #fh-weapon{top:max(12px,env(safe-area-inset-top));bottom:auto;right:auto;left:50%;transform:translateX(-50%);min-width:0;padding:6px 12px;text-align:center;max-width:46vw}
+body.touch.on-foot #fh-weapon{top:calc(max(12px,env(safe-area-inset-top)) + 58px);bottom:auto;right:auto;left:50%;transform:translateX(-50%);min-width:0;padding:6px 12px;text-align:center;max-width:46vw}
 body.touch.on-foot #fh-tip{display:none}
 body.touch.on-foot #fh-bars{top:calc(max(12px,env(safe-area-inset-top)) + 96px);bottom:auto;left:max(12px,env(safe-area-inset-left));min-width:120px;padding:6px 8px;font-size:9px}
-body.touch.on-foot #fh-prompt{bottom:auto;top:30%}
+body.touch.on-foot #fh-prompt{bottom:auto;top:44%}
 @media (max-height:460px){
   #ft-use{bottom:calc(max(12px,env(safe-area-inset-bottom)) + 96px*var(--ts))}
   #ft-car{bottom:auto;top:calc(max(12px,env(safe-area-inset-top)) + 64px)}
