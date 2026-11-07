@@ -4,12 +4,12 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 const status = document.querySelector('#render-status');
 const vrButton = document.querySelector('#vr');
 const descriptions = {
- Deer: 'A classic woodland encounter. Deer are part of the planned wildlife roster for the hunting expansion.',
- Elk: 'A striking presence in the open country. Elk are planned for the hunting expansion; this site’s banner is concept artwork.',
- Bear: 'A powerful wilderness encounter. Bears are on the planned roster, with behavior and balancing to be defined in the game build.',
- Fox: 'A smaller quarry for a different kind of expedition. Foxes are included in the proposed wildlife roster.',
- Rabbit: 'Watch the undergrowth. Rabbits bring small-game variety to the planned hunting experience.',
- Coyote: 'Another reason to explore beyond the road. Coyotes complete the initial proposed wildlife lineup.'
+ Deer: ['Graceful and alert. Deer flag their white tails and bound away when startled. Look along meadow edges at dawn and dusk.', 'Meadows, forest edges'],
+ Elk: ['Massive and social, moving in herds. Bulls carry sweeping antlers and spot you from a long way off.', 'High meadows, open slopes'],
+ Bear: ['Powerful and usually shy, black bears give people a wide berth. A wounded bear may charge, and in Survival they hunt.', 'Forest, streams'],
+ Fox: ['Quick and clever. A flash of orange with a white-tipped tail, hunting voles in the grass.', 'Field edges, brush'],
+ Rabbit: ['Small and watchful. Cottontails freeze, then zig-zag. Snowshoe hares turn white on the snowy high ground.', 'Grass, brush, snow'],
+ Coyote: ['Adaptable and vocal, often in pairs or small packs. A grey-tan coat and a bushy tail held low as it trots.', 'Open country, ridges']
 };
 document.querySelectorAll('[data-species]').forEach((button, index) => {
  button.setAttribute('aria-pressed', String(index === 0));
@@ -17,7 +17,9 @@ document.querySelectorAll('[data-species]').forEach((button, index) => {
   document.querySelectorAll('[data-species]').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-pressed','false'); });
   button.classList.add('active'); button.setAttribute('aria-pressed','true');
   document.querySelector('#species-title').textContent = button.dataset.species;
-  document.querySelector('#species-copy').textContent = descriptions[button.dataset.species];
+  const [copy, habitat] = descriptions[button.dataset.species];
+  document.querySelector('#species-copy').textContent = copy;
+  const h = document.querySelector('#species-habitat'); if (h) h.textContent = 'IN THE GAME · ' + habitat.toUpperCase();
   document.querySelector('#species-index').textContent = `0${index + 1} / 06`;
  });
 });

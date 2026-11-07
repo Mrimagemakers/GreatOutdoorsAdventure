@@ -85,129 +85,232 @@ function rig(spec, bull) {
   return { bones, list, root, H, L, R, W, up, lo, bull };
 }
 
+// ------------------------------------------------------------------ sculpted bodies
+/* Each animal is one smooth, continuous body: overlapping shapes (barrel, chest, haunches, muscled legs, neck, skull,
+   muzzle, tail) are blended with a smooth union and meshed as a single surface, so the neck flows into the shoulders
+   and the legs grow out of the body. Skin weights blend between neighbouring bones so joints bend without gaps. Ears,
+   eyes, nose and antlers stay separate pieces. Fur grain comes from the material. */
+const v3 = (x, y, z) => new T.Vector3(x, y, z);
+function sdEllipsoid(x, y, z, rx, ry, rz) {
+  const k0 = Math.hypot(x / rx, y / ry, z / rz), k1 = Math.hypot(x / (rx * rx), y / (ry * ry), z / (rz * rz));
+  return k1 < 1e-9 ? -Math.min(rx, ry, rz) : k0 * (k0 - 1) / k1;
+}
+function sdRoundCone(px, py, pz, a, b, r1, r2) { // capsule whose radius runs from r1 at a to r2 at b
+  const bax = b.x - a.x, bay = b.y - a.y, baz = b.z - a.z, pax = px - a.x, pay = py - a.y, paz = pz - a.z;
+  const l2 = bax * bax + bay * bay + baz * baz, rr = r1 - r2, a2 = l2 - rr * rr, il2 = 1 / l2;
+  const y = pax * bax + pay * bay + paz * baz, z = y - l2;
+  const xx = (pax * l2 - bax * y), xy = (pay * l2 - bay * y), xz = (paz * l2 - baz * y), x2 = xx * xx + xy * xy + xz * xz;
+  const y2 = y * y * l2, z2 = z * z * l2, k = Math.sign(rr) * rr * rr * x2;
+  if (Math.sign(z) * a2 * z2 > k) return Math.sqrt(x2 + z2) * il2 - r2;
+  if (Math.sign(y) * a2 * y2 < k) return Math.sqrt(x2 + y2) * il2 - r1;
+  return (Math.sqrt(x2 * a2 * il2) + y * rr) * il2 - r1;
+}
+const smin = (a, b, k) => { const h = Math.max(k - Math.abs(a - b), 0) / k; return Math.min(a, b) - h * h * k * 0.25; };
+
 function buildGeometry(spec, rg, winter) {
   const C = (hex) => new T.Color(hex);
-  const parts = [];
-  const add = (g, boneName, color, shade) => {
-    if (g.index) { g.computeVertexNormals(); g = g.toNonIndexed(); } // smooth normals first, then split
-    g.deleteAttribute('uv');
-    const n = g.attributes.position.count, col = new Float32Array(n * 3), base = C(color), tmp = new T.Color();
-    const p = g.attributes.position;
-    for (let i = 0; i < n; i++) {
-      tmp.copy(base); if (shade) shade(tmp, p.getX(i), p.getY(i), p.getZ(i));
-      col[i * 3] = tmp.r; col[i * 3 + 1] = tmp.g; col[i * 3 + 2] = tmp.b;
-    }
-    g.setAttribute('color', new T.BufferAttribute(col, 3));
-    parts.push({ g, bone: rg.bones[boneName] });
-  };
   const coat = winter ? spec.coatWinter : spec.coat;
   spec = Object.assign({}, spec, winter ? { face: spec.faceWinter || spec.face, legs: spec.legsWinter || spec.legs } : {});
-  const base = SPECIES[Object.keys(SPECIES).find((k) => SPECIES[k].name === spec.name)]; // identity checks below use the original
-  const { L, R, W } = rg;
-  const belly = C(spec.belly), accent = C(spec.accent);
-  // torso: a capsule along z, belly paler, rump patch / chest blaze
-  const torso = new T.CapsuleGeometry(R, L, 10, 18).rotateX(Math.PI / 2).scale(W, 1, 1);
-  { // sculpt: deep chest, tucked flank, rounded rump, a slight rise at the withers
-    const tp = torso.attributes.position, half = L / 2 + R, sp = spec.shape || {};
-    const chest = (sp.chest ?? 0.22) * 1.6, tuck = (sp.tuck ?? 0.22) * 1.4, withers = (sp.withers ?? 0.08) * 1.5, rump = sp.rump ?? 0.05;
-    for (let i = 0; i < tp.count; i++) {
-      let x = tp.getX(i), y = tp.getY(i), z = tp.getZ(i);
-      const t = z / half, front = Math.max(0, t), back = Math.max(0, -t);
-      if (y < 0) y *= 1 + chest * Math.sin(Math.min(1, front * 1.6) * Math.PI * 0.5) * (1 - front * 0.4) - tuck * Math.sin(Math.min(1, back * 1.7) * Math.PI * 0.5);
-      else y *= 1 + withers * Math.exp(-Math.pow((t - 0.55) / 0.22, 2)) + rump * Math.exp(-Math.pow((t + 0.6) / 0.2, 2));
-      x *= 1 - 0.12 * front * front + 0.05 * Math.exp(-Math.pow((t + 0.5) / 0.25, 2));
-      tp.setXYZ(i, x, y, z);
-    }
-  }
-  add(torso, 'body', coat, (c, x, y, z) => {
-    if (y > R * 0.75) c.multiplyScalar(0.84); // darker along the spine
-    if (y < -R * 0.5) c.lerp(belly, clamp((-R * 0.5 - y) / (R * 0.35), 0, 1));
-    if (base === SPECIES.elk && z < -L * 0.45 && y > -R * 0.4) c.lerp(accent, 0.85);
-    if (base === SPECIES.deer && z < -L * 0.55 && y < R * 0.2) c.lerp(accent, 0.55);
-    if (base === SPECIES.fox && z > L * 0.3 && y < 0) c.lerp(accent, 0.8);
-    c.multiplyScalar(0.93 + 0.1 * Math.sin(x * 23 + z * 17 + y * 11));
-  });
-  for (const sx of [1, -1]) {
-    add(new T.SphereGeometry(R * 0.62, 10, 8).scale(0.55, 1.05, 0.9).translate(sx * R * W * 0.52, -R * 0.12, L * 0.42), 'body', coat);
-    add(new T.SphereGeometry(R * 0.7, 10, 8).scale(0.55, 1.0, 1.0).translate(sx * R * W * 0.5, -R * 0.05, -L * 0.42), 'body', coat);
-  }
-  if (spec.hump) add(new T.SphereGeometry(R * 0.85, 12, 8).scale(W * 0.95, 0.9, 1.1).translate(0, R * 0.25, L * 0.32), 'body', coat);
+  const base = SPECIES[Object.keys(SPECIES).find((k) => SPECIES[k].name === spec.name)];
+  const { L, R, W, up, lo } = rg, H = rg.H;
+  const belly = C(spec.belly), accent = C(spec.accent), coatC = C(coat), legsC = C(spec.legs), faceC = C(spec.face), darkC = C(spec.dark);
+  rg.root.updateMatrixWorld(true);
+  // ---- shapes, each in its bone's frame
+  const prims = [];
+  const P = (bone, sd, k, color, cen, rad) => {
+    const b = rg.bones[bone]; const m = b.matrixWorld.clone();
+    prims.push({ bi: rg.list.indexOf(b), e: m.clone().invert().elements, sd, k, color, c: cen.clone().applyMatrix4(m), r: rad });
+  };
+  const sp = spec.shape || {}, chest = sp.chest ?? 0.22, tuck = sp.tuck ?? 0.22, withers = sp.withers ?? 0.08, rump = sp.rump ?? 0.05;
+  const torsoCol = (c, x, y, z) => {
+    c.copy(coatC);
+    if (y > R * 0.7) c.multiplyScalar(0.86);
+    if (y < -R * 0.45) c.lerp(belly, clamp((-R * 0.45 - y) / (R * 0.4), 0, 1));
+    if (base === SPECIES.elk && z < -L * 0.42 && y > -R * 0.4) c.lerp(accent, 0.85);
+    if (base === SPECIES.elk && z > L * 0.35) c.lerp(C(spec.neckCol || coat), clamp((z - L * 0.35) / (R * 0.6), 0, 1));
+    if (base === SPECIES.deer && z < -L * 0.5 && y < R * 0.3) c.lerp(accent, 0.6);
+    if (base === SPECIES.fox && z > L * 0.25 && y < -R * 0.1) c.lerp(accent, 0.85);
+  };
+  // barrel, chest and hindquarters
+  P('body', (x, y, z) => sdEllipsoid(x, y - R * tuck * 0.25, z, R * W, R * (1 - tuck * 0.35), L * 0.5 + R * 0.35), R * 0.6, torsoCol, v3(0, 0, 0), L * 0.6 + R);
+  P('body', (x, y, z) => sdEllipsoid(x, y + R * chest * 0.25, z - L * 0.3, R * W * 0.95, R * (1.02 + chest * 0.55), R * 1.15), R * 0.55, torsoCol, v3(0, 0, L * 0.3), R * 1.6);
+  P('body', (x, y, z) => sdEllipsoid(x, y - R * rump * 0.4, z + L * 0.33, R * W * 1.02, R * (1.0 + rump * 0.5), R * 1.2), R * 0.55, torsoCol, v3(0, 0, -L * 0.33), R * 1.5);
+  if (withers > 0.02) P('body', (x, y, z) => sdEllipsoid(x, y - R * 0.72, z - L * 0.36, R * W * 0.55, R * (0.35 + withers * 1.5), R * 0.75), R * 0.4, torsoCol, v3(0, R * 0.7, L * 0.36), R);
+  if (spec.hump) P('body', (x, y, z) => sdEllipsoid(x, y - R * 0.45, z - L * 0.3, R * W * 0.85, R * 0.75, R * 0.9), R * 0.5, torsoCol, v3(0, R * 0.4, L * 0.3), R * 1.2);
   // neck
   const nl = spec.neckLen, nr = spec.neckR;
-  add(new T.CylinderGeometry(nr * 0.8, nr * 1.65, nl + nr * 1.5, 12, 3).rotateX(Math.PI / 2).scale(1, 1.25, 1).translate(0, 0, nl * 0.42), 'neck', spec.neckCol || coat,
-    (c, x, y) => { if (y < -nr * 0.4) c.lerp(belly, 0.35); });
-  // head, muzzle, nose, eyes, ears
-  const hl = spec.headLen, hr = spec.headR;
-  add(new T.SphereGeometry(1, 12, 9).scale(hr * 0.95, hr, hl * 0.5).translate(0, 0, hl * 0.3), 'head', spec.face);
-  if (spec.muzzle > 0.04) add(new T.CylinderGeometry(hr * 0.42, hr * 0.7, spec.muzzle, 9).rotateX(Math.PI / 2).translate(0, -hr * 0.25, hl * 0.55 + spec.muzzle * 0.5), 'head', spec.face,
-    (c, x, y) => { if (y < -hr * 0.45 && spec !== SPECIES.bear) c.lerp(belly, 0.5); });
-  add(new T.SphereGeometry(hr * 0.24, 6, 5).translate(0, -hr * 0.2, hl * 0.55 + spec.muzzle + hr * 0.05), 'head', spec.dark);
-  for (const sx of [1, -1]) add(new T.SphereGeometry(hr * 0.13, 6, 5).translate(sx * hr * 0.82, hr * 0.28, hl * 0.42), 'head', spec.dark);
+  const neckCol = (c, x, y) => { c.copy(C(spec.neckCol || coat)); if (y < -nr * 0.35) c.lerp(belly, base === SPECIES.bear ? 0 : 0.4); };
+  P('neck', (x, y, z) => sdRoundCone(x, y * 0.85, z, v3(0, 0, -nr * 0.8), v3(0, 0, nl), nr * 1.75, nr * 1.0), nr * 1.2, neckCol, v3(0, 0, nl * 0.4), nl + nr * 2);
+  // head: skull and muzzle
+  const hl = spec.headLen, hr = spec.headR, mz = spec.muzzle;
+  const headCol = (c, x, y, z) => {
+    if (base === SPECIES.bear) { c.copy(coatC); c.lerp(faceC, clamp((z - hl * 0.45) / (mz * 0.6 + 1e-3), 0, 1)); return; } // black head, tan muzzle
+    c.copy(faceC); if (y < -hr * 0.45) c.lerp(belly, 0.45); if (z > hl * 0.55 + mz * 0.75) c.multiplyScalar(0.72);
+  };
+  P('head', (x, y, z) => sdEllipsoid(x, y, z - hl * 0.25, hr * 0.98, hr * 1.02, hl * 0.48), hr * 0.5, headCol, v3(0, 0, hl * 0.25), hl * 0.6 + hr);
+  if (mz > 0.03) P('head', (x, y, z) => sdRoundCone(x, y, z, v3(0, -hr * 0.18, hl * 0.4), v3(0, -hr * 0.3, hl * 0.55 + mz), hr * 0.62, hr * (base === SPECIES.bear ? 0.42 : 0.3)), hr * 0.55, headCol, v3(0, -hr * 0.2, hl * 0.5 + mz * 0.5), mz + hr);
+  P('head', (x, y, z) => sdEllipsoid(x, y + hr * 0.5, z - hl * 0.42, hr * 0.62, hr * 0.42, hl * 0.32), hr * 0.4, headCol, v3(0, -hr * 0.5, hl * 0.42), hr);  // jaw and cheek
+  // legs: muscled upper leg rooted in the body, slim lower leg, hoof or paw
+  const lr = spec.legR;
+  for (const s of ['L', 'R']) for (const e of ['F', 'H']) {
+    const hind = e === 'H', hip = 'hip' + e + s, knee = 'knee' + e + s, mus = hind ? 2.7 : 2.2;
+    const legCol = (c, x, y) => { c.copy(legsC); c.lerp(coatC, clamp((y + up * 0.25) / (up * 0.45), 0, 1)); if (base === SPECIES.fox) c.lerp(darkC, clamp((-y - up * 0.3) / (up * 0.4), 0, 0.8)); };
+    P(hip, (x, y, z) => sdRoundCone(x, y, z, v3(0, R * 0.5, hind ? -lr * 0.8 : lr * 0.4), v3(0, -up * 0.98, 0), lr * mus * (hind ? 1.5 : 1.3), lr * 1.08), lr * 2.2, legCol, v3(0, -up * 0.3, 0), up + R);
+    if (hind) P(hip, (x, y, z) => sdEllipsoid(x, y + up * 0.05, z + lr * 1.5, lr * 2.4, up * 0.5, lr * 3.0), lr * 2, legCol, v3(0, 0, -lr), up * 0.6);
+    const lowCol = (c) => c.copy(legsC);
+    P(knee, (x, y, z) => sdRoundCone(x, y, z, v3(0, 0, hind ? -lr * 0.5 : 0), v3(0, -lo + lr * 1.4, lr * 0.15), lr * 1.15, lr * 0.72), lr * 1.2, lowCol, v3(0, -lo / 2, 0), lo);
+    if (spec.feet === 'hoof') P(knee, (x, y, z) => sdRoundCone(x, y, z, v3(0, -lo + lr * 1.3, lr * 0.15), v3(0, -lo + lr * 0.25, lr * 0.4), lr * 0.85, lr * 1.0), lr * 0.5, (c) => c.copy(darkC), v3(0, -lo, 0), lr * 2);
+    else P(knee, (x, y, z) => sdEllipsoid(x, y + lo - lr * 0.6, z - lr * 0.6, lr * 1.45, lr * 0.75, lr * 2.0), lr * 0.9, (c) => c.copy(base === SPECIES.rabbit && hind ? legsC : base === SPECIES.bear ? darkC : legsC.clone().lerp(darkC, 0.5)), v3(0, -lo, lr * 0.5), lr * 2.5);
+  }
+  if (base === SPECIES.rabbit) for (const sx of [1, -1]) P('body', (x, y, z) => sdEllipsoid(x - sx * R * 0.5, y + R * 0.15, z + L * 0.35, R * 0.55, R * 0.95, R * 1.15), R * 0.5, torsoCol, v3(sx * R * 0.5, -R * 0.15, -L * 0.35), R * 1.2);
+  // tail
+  const tl = spec.tailLen;
+  if (spec.tail === 'brush') P('tail', (x, y, z) => sdRoundCone(x, y, z, v3(0, 0, 0), v3(0, -tl * 0.15, -tl * 0.95), tl * 0.13, tl * 0.2), tl * 0.25, (c, x, y, z) => { c.copy(coatC); if (spec.tailTip && z < -tl * 0.8) c.lerp(accent, 0.9); }, v3(0, 0, -tl * 0.5), tl);
+  else if (spec.tail === 'flag') P('tail', (x, y, z) => sdEllipsoid(x, y, z + tl * 0.45, tl * 0.28, tl * 0.14, tl * 0.5), tl * 0.25, (c, x, y) => { c.copy(coatC); if (y < 0) c.lerp(accent, 0.95); }, v3(0, 0, -tl * 0.45), tl * 0.6);
+  else if (spec.tail === 'puff') P('tail', (x, y, z) => sdEllipsoid(x, y, z + tl * 0.3, tl * 0.9, tl * 0.9, tl * 0.8), tl * 0.5, (c) => c.copy(accent), v3(0, 0, -tl * 0.3), tl);
+  else P('tail', (x, y, z) => sdRoundCone(x, y, z, v3(0, 0, 0), v3(0, -tl * 0.2, -tl * 0.8), Math.max(tl * 0.35, 0.02), Math.max(tl * 0.18, 0.012)), tl * 0.3, (c) => c.copy(spec.antlers === 'elk' ? accent : coatC), v3(0, 0, -tl * 0.4), tl);
+
+  // ---- sample the field on a grid and mesh it (surface nets)
+  const lo3 = v3(1e9, 1e9, 1e9), hi3 = v3(-1e9, -1e9, -1e9);
+  for (const p of prims) { lo3.min(p.c.clone().subScalar(p.r * 1.2)); hi3.max(p.c.clone().addScalar(p.r * 1.2)); }
+  lo3.y = Math.max(lo3.y, -0.05);
+  const size = hi3.clone().sub(lo3), cell = Math.max(size.x, size.y, size.z) / 72;
+  const nx = Math.ceil(size.x / cell) + 2, ny = Math.ceil(size.y / cell) + 2, nz = Math.ceil(size.z / cell) + 2;
+  const field = (x, y, z, out) => { // distance and, optionally, each shape's distance
+    let d = 1e9;
+    for (let i = 0; i < prims.length; i++) {
+      const p = prims[i];
+      if (!out) { const lb = Math.hypot(x - p.c.x, y - p.c.y, z - p.c.z) - p.r * 1.2; if (lb > d + p.k) continue; } // too far to change the surface here
+      const e = p.e, lx = e[0] * x + e[4] * y + e[8] * z + e[12], ly = e[1] * x + e[5] * y + e[9] * z + e[13], lz = e[2] * x + e[6] * y + e[10] * z + e[14];
+      const di = p.sd(lx, ly, lz); if (out) { out[i * 4] = di; out[i * 4 + 1] = lx; out[i * 4 + 2] = ly; out[i * 4 + 3] = lz; }
+      d = d === 1e9 ? di : smin(d, di, p.k);
+    }
+    return d;
+  };
+  const F = new Float32Array(nx * ny * nz), id = (i, j, k) => i + nx * (j + ny * k);
+  // coarse pass every 3rd point; fine points only where the surface could be near
+  const S3 = 3, cx = Math.ceil((nx - 1) / S3) + 1, cy = Math.ceil((ny - 1) / S3) + 1, cz = Math.ceil((nz - 1) / S3) + 1, Cg = new Float32Array(cx * cy * cz);
+  for (let k = 0; k < cz; k++) for (let j = 0; j < cy; j++) for (let i = 0; i < cx; i++) Cg[i + cx * (j + cy * k)] = field(lo3.x + Math.min(i * S3, nx - 1) * cell, lo3.y + Math.min(j * S3, ny - 1) * cell, lo3.z + Math.min(k * S3, nz - 1) * cell);
+  const band = cell * S3 * 1.9;
+  for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const c = Cg[Math.round(i / S3) + cx * (Math.round(j / S3) + cy * Math.round(k / S3))];
+    F[id(i, j, k)] = Math.abs(c) > band ? c : field(lo3.x + i * cell, lo3.y + j * cell, lo3.z + k * cell);
+  }
+  const vmap = new Int32Array(nx * ny * nz).fill(-1), verts = [];
+  const corner = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0], [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]];
+  const edges = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
+  const cv = new Float32Array(8);
+  for (let k = 0; k < nz - 1; k++) for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
+    let mask = 0; for (let c = 0; c < 8; c++) { cv[c] = F[id(i + corner[c][0], j + corner[c][1], k + corner[c][2])]; if (cv[c] < 0) mask |= 1 << c; }
+    if (mask === 0 || mask === 255) continue;
+    let sx = 0, sy = 0, sz = 0, n = 0;
+    for (const [a, b] of edges) {
+      if ((cv[a] < 0) === (cv[b] < 0)) continue;
+      const t = cv[a] / (cv[a] - cv[b]);
+      sx += corner[a][0] + (corner[b][0] - corner[a][0]) * t; sy += corner[a][1] + (corner[b][1] - corner[a][1]) * t; sz += corner[a][2] + (corner[b][2] - corner[a][2]) * t; n++;
+    }
+    vmap[id(i, j, k)] = verts.length / 3;
+    verts.push(lo3.x + (i + sx / n) * cell, lo3.y + (j + sy / n) * cell, lo3.z + (k + sz / n) * cell);
+  }
+  const idx = [];
+  const quad = (a, b, c, d, flip) => { if (a < 0 || b < 0 || c < 0 || d < 0) return; if (flip) idx.push(a, b, c, a, c, d); else idx.push(a, c, b, a, d, c); };
+  for (let k = 1; k < nz - 1; k++) for (let j = 1; j < ny - 1; j++) for (let i = 1; i < nx - 1; i++) {
+    const inside = F[id(i, j, k)] < 0;
+    if (i < nx - 1 && inside !== (F[id(i + 1, j, k)] < 0)) quad(vmap[id(i, j - 1, k - 1)], vmap[id(i, j, k - 1)], vmap[id(i, j, k)], vmap[id(i, j - 1, k)], inside);
+    if (j < ny - 1 && inside !== (F[id(i, j + 1, k)] < 0)) quad(vmap[id(i - 1, j, k - 1)], vmap[id(i - 1, j, k)], vmap[id(i, j, k)], vmap[id(i, j, k - 1)], inside);
+    if (k < nz - 1 && inside !== (F[id(i, j, k + 1)] < 0)) quad(vmap[id(i - 1, j - 1, k)], vmap[id(i, j - 1, k)], vmap[id(i, j, k)], vmap[id(i - 1, j, k)], inside);
+  }
+  // ---- per vertex: settle onto the surface, normal from the field, colour and skin weights from the nearest shapes
+  const nv = verts.length / 3, nor = new Float32Array(nv * 3), col = new Float32Array(nv * 3), si = new Uint16Array(nv * 4), sw = new Float32Array(nv * 4);
+  const ds = new Float32Array(prims.length * 4), h = cell * 0.5, cA = new T.Color(), cB = new T.Color();
+  for (let v = 0; v < nv; v++) {
+    let x = verts[v * 3], y = verts[v * 3 + 1], z = verts[v * 3 + 2];
+    let gx = 0, gy = 0, gz = 0;
+    for (let it = 0; it < 2; it++) {
+      const d = field(x, y, z);
+      gx = field(x + h, y, z) - field(x - h, y, z); gy = field(x, y + h, z) - field(x, y - h, z); gz = field(x, y, z + h) - field(x, y, z - h);
+      const gl = Math.hypot(gx, gy, gz) || 1; gx /= gl; gy /= gl; gz /= gl;
+      x -= gx * d; y -= gy * d; z -= gz * d;
+    }
+    verts[v * 3] = x; verts[v * 3 + 1] = y; verts[v * 3 + 2] = z; nor[v * 3] = gx; nor[v * 3 + 1] = gy; nor[v * 3 + 2] = gz;
+    field(x, y, z, ds);
+    // nearest two shapes decide the colour; bones weighted by closeness
+    let b1 = -1, b2 = -1, d1 = 1e9, d2 = 1e9;
+    for (let i = 0; i < prims.length; i++) { const di = ds[i * 4]; if (di < d1) { d2 = d1; b2 = b1; d1 = di; b1 = i; } else if (di < d2) { d2 = di; b2 = i; } }
+    const p1 = prims[b1], p2 = prims[b2 >= 0 ? b2 : b1];
+    p1.color(cA, ds[b1 * 4 + 1], ds[b1 * 4 + 2], ds[b1 * 4 + 3]); p2.color(cB, ds[b2 * 4 + 1], ds[b2 * 4 + 2], ds[b2 * 4 + 3]);
+    const t = clamp(0.5 - (d2 - d1) / (p1.k * 0.9), 0, 0.5); cA.lerp(cB, t);
+    const grain = 0.94 + 0.08 * Math.sin(x * 61 + z * 47 + y * 29) * Math.sin(z * 23 - y * 37);
+    col[v * 3] = cA.r * grain; col[v * 3 + 1] = cA.g * grain; col[v * 3 + 2] = cA.b * grain;
+    const wb = new Map();
+    for (let i = 0; i < prims.length; i++) { const w = Math.exp(-(ds[i * 4] - d1) / Math.max(prims[i].k * 0.45, 1e-4)); if (w > 0.02) wb.set(prims[i].bi, (wb.get(prims[i].bi) || 0) + w); }
+    const top = [...wb.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4), tot = top.reduce((s, q) => s + q[1], 0);
+    top.forEach(([bi, w], q) => { si[v * 4 + q] = bi; sw[v * 4 + q] = w / tot; });
+  }
+  // ---- separate details: ears, eyes, nose, antlers (rigid to the head)
+  const extra = [];
+  const add = (g, boneName, color) => {
+    g.computeVertexNormals(); if (g.index) g = g.toNonIndexed(); g.applyMatrix4(rg.bones[boneName].matrixWorld);
+    extra.push({ g, bi: rg.list.indexOf(rg.bones[boneName]), c: C(color) });
+  };
+  add(new T.SphereGeometry(hr * 0.2, 10, 8).scale(1.15, 0.8, 0.9).translate(0, -hr * 0.22, hl * 0.55 + mz + hr * 0.08), 'head', spec.dark);
+  for (const sx of [1, -1]) add(new T.SphereGeometry(hr * 0.12, 12, 10).translate(sx * hr * 0.8, hr * 0.3, hl * 0.4), 'head', '#0b0908');
   for (const sx of [1, -1]) {
     let e;
-    if (spec.ears === 'round') e = new T.SphereGeometry(spec.earLen, 8, 6).scale(1, 1, 0.45).translate(sx * hr * 0.75, hr * 0.85, hl * 0.12);
-    else if (spec.ears === 'long') e = new T.CapsuleGeometry(spec.earLen * 0.18, spec.earLen, 4, 8).scale(1, 1, 0.45).rotateZ(sx * -0.18).rotateX(-0.35).translate(sx * hr * 0.4, hr + spec.earLen * 0.55, hl * 0.05);
-    else e = new T.ConeGeometry(spec.earLen * 0.4, spec.earLen, 8).scale(1, 1, 0.5).rotateZ(sx * -0.55).translate(sx * (hr * 0.75 + spec.earLen * 0.2), hr * 0.75 + spec.earLen * 0.3, hl * 0.12);
-    add(e, 'head', base === SPECIES.fox ? '#2a1d16' : spec.face);
+    if (spec.ears === 'round') e = new T.SphereGeometry(spec.earLen, 14, 10).scale(1, 1, 0.42).translate(sx * hr * 0.72, hr * 0.85, hl * 0.1);
+    else if (spec.ears === 'long') e = new T.CapsuleGeometry(spec.earLen * 0.18, spec.earLen, 6, 12).scale(1, 1, 0.38).rotateZ(sx * -0.18).rotateX(-0.35).translate(sx * hr * 0.4, hr + spec.earLen * 0.5, hl * 0.05);
+    else e = new T.ConeGeometry(spec.earLen * 0.42, spec.earLen, 14, 1, true).scale(1, 1, 0.45).rotateZ(sx * -0.55).translate(sx * (hr * 0.72 + spec.earLen * 0.2), hr * 0.72 + spec.earLen * 0.3, hl * 0.1);
+    add(e, 'head', base === SPECIES.fox ? '#2a1d16' : base === SPECIES.bear ? coat : spec.face);
   }
-  // antlers: main beams sweeping back and up, with tines
   if (rg.bull && spec.antlers) {
     const big = spec.antlers === 'elk', r0 = big ? 0.028 : 0.016, beam = big ? 0.95 : 0.42, tines = big ? 5 : 3, tc = '#d8c8a8';
     for (const sx of [1, -1]) {
-      const pts = []; for (let i = 0; i <= 8; i++) { const t = i / 8; pts.push(new T.Vector3(sx * (hr * 0.5 + Math.sin(t * 1.4) * beam * 0.4), hr * 0.8 + t * beam * 0.75, hl * 0.15 - Math.sin(t * 2.2) * beam * 0.45 + t * t * beam * 0.25)); }
+      const pts = []; for (let i = 0; i <= 8; i++) { const t = i / 8; pts.push(v3(sx * (hr * 0.5 + Math.sin(t * 1.4) * beam * 0.4), hr * 0.8 + t * beam * 0.75, hl * 0.15 - Math.sin(t * 2.2) * beam * 0.45 + t * t * beam * 0.25)); }
       const curve = new T.CatmullRomCurve3(pts);
-      add(new T.TubeGeometry(curve, 10, r0, 5, false), 'head', tc);
+      add(new T.TubeGeometry(curve, 16, r0, 7, false), 'head', tc);
       for (let k = 1; k <= tines; k++) {
-        const t = 0.18 + (k / (tines + 0.6)) * 0.78, p = curve.getPoint(t), tl = (big ? 0.32 : 0.16) * (1 - t * 0.35);
-        const g = new T.CylinderGeometry(r0 * 0.3, r0 * 0.8, tl, 5).translate(0, tl / 2, 0).rotateX(0.55).rotateZ(-sx * 0.2).translate(p.x, p.y, p.z);
-        add(g, 'head', tc);
+        const t = 0.18 + (k / (tines + 0.6)) * 0.78, p = curve.getPoint(t), tl2 = (big ? 0.32 : 0.16) * (1 - t * 0.35);
+        add(new T.ConeGeometry(r0 * 0.8, tl2, 7).translate(0, tl2 / 2, 0).rotateX(0.55).rotateZ(-sx * 0.2).translate(p.x, p.y, p.z), 'head', tc);
       }
     }
   }
-  // legs: tapered upper and lower, hooves or paws
-  const lr = spec.legR, up = rg.up, lo = rg.lo;
-  for (const s of ['L', 'R']) for (const e of ['F', 'H']) {
-    const thick = e === 'H' ? 1.35 : 1.15;
-    add(new T.CylinderGeometry(lr * thick * 1.25, lr * 1.05, up + lr * 2, 7).translate(0, -up / 2, 0), 'hip' + e + s, spec.legs,
-      (c, x, y) => { c.lerp(C(coat), clamp((y + up * 0.35) / (up * 0.35), 0, 1)); });
-    add(new T.CylinderGeometry(lr, lr * 0.8, lo, 6).translate(0, -lo / 2, 0), 'knee' + e + s, spec.legs);
-    if (spec.feet === 'hoof') add(new T.CylinderGeometry(lr * 0.85, lr * 1.05, lr * 1.6, 6).translate(0, -lo + lr * 0.5, lr * 0.15), 'knee' + e + s, spec.dark);
-    else add(new T.SphereGeometry(lr * 1.35, 7, 5).scale(1, 0.55, 1.5).translate(0, -lo + lr * 0.5, lr * 0.5), 'knee' + e + s, base === SPECIES.rabbit && e === 'H' ? spec.legs : spec.dark);
-  }
-  if (base === SPECIES.rabbit) { // big hind haunches
-    for (const sx of [1, -1]) add(new T.SphereGeometry(R * 0.7, 9, 7).scale(0.6, 1, 1.2).translate(sx * R * 0.55, -R * 0.15, -L * 0.35), 'body', coat);
-  }
-  // tail
-  const tl = spec.tailLen;
-  if (spec.tail === 'brush') add(new T.CapsuleGeometry(tl * 0.17, tl * 0.75, 5, 9).rotateX(Math.PI / 2).translate(0, 0, -tl * 0.5), 'tail', coat,
-    (c, x, y, z) => { if (spec.tailTip && z < -tl * 0.86) c.set(spec.accent); });
-  else if (spec.tail === 'flag') add(new T.ConeGeometry(tl * 0.3, tl, 8).rotateX(-Math.PI / 2).scale(1, 0.55, 1).translate(0, 0, -tl * 0.4), 'tail', coat,
-    (c, x, y) => { if (y < 0) c.set(spec.accent); });
-  else if (spec.tail === 'puff') add(new T.SphereGeometry(tl, 8, 6).translate(0, 0, -tl * 0.4), 'tail', spec.accent);
-  else add(new T.ConeGeometry(Math.max(tl * 0.45, 0.02), tl, 6).rotateX(-Math.PI / 2).translate(0, 0, -tl * 0.4), 'tail', spec.antlers === 'elk' ? spec.accent : coat);
-
-  // bind: move every part into model space at rest and give it a rigid skin weight to its bone
-  rg.root.updateMatrixWorld(true);
-  const pos = [], nor = [], col = [], si = [], sw = [];
-  for (const { g, bone } of parts) {
-    g.applyMatrix4(bone.matrixWorld); // also carries the smooth normals into model space
-    const bi = rg.list.indexOf(bone), n = g.attributes.position.count;
-    pos.push(...g.attributes.position.array); nor.push(...g.attributes.normal.array); col.push(...g.attributes.color.array);
-    for (let i = 0; i < n; i++) { si.push(bi, 0, 0, 0); sw.push(1, 0, 0, 0); }
+  // ---- assemble
+  let ev = 0; for (const x of extra) ev += x.g.attributes.position.count;
+  const N = nv + ev, pos = new Float32Array(N * 3), nrm = new Float32Array(N * 3), cl = new Float32Array(N * 3), sI = new Uint16Array(N * 4), sW = new Float32Array(N * 4);
+  pos.set(verts); nrm.set(nor); cl.set(col); sI.set(si); sW.set(sw);
+  let o = nv; const index = idx.slice();
+  for (const x of extra) {
+    const g = x.g, n = g.attributes.position.count;
+    pos.set(g.attributes.position.array, o * 3); nrm.set(g.attributes.normal.array, o * 3);
+    for (let i = 0; i < n; i++) { cl[(o + i) * 3] = x.c.r; cl[(o + i) * 3 + 1] = x.c.g; cl[(o + i) * 3 + 2] = x.c.b; sI[(o + i) * 4] = x.bi; sW[(o + i) * 4] = 1; index.push(o + i); }
+    o += n;
   }
   const geo = new T.BufferGeometry();
-  geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('normal', new T.Float32BufferAttribute(nor, 3));
-  geo.setAttribute('color', new T.Float32BufferAttribute(col, 3));
-  geo.setAttribute('skinIndex', new T.Uint16BufferAttribute(si, 4));
-  geo.setAttribute('skinWeight', new T.Float32BufferAttribute(sw, 4));
-  geo.computeBoundingSphere(); geo.boundingSphere.radius *= 1.6; // room for running poses
+  geo.setAttribute('position', new T.BufferAttribute(pos, 3)); geo.setAttribute('normal', new T.BufferAttribute(nrm, 3));
+  geo.setAttribute('color', new T.BufferAttribute(cl, 3)); geo.setAttribute('skinIndex', new T.BufferAttribute(sI, 4)); geo.setAttribute('skinWeight', new T.BufferAttribute(sW, 4));
+  geo.setIndex(N > 65535 ? new T.Uint32BufferAttribute(index, 1) : new T.Uint16BufferAttribute(index, 1));
+  geo.computeBoundingSphere(); geo.boundingSphere.radius *= 1.6;
   return geo;
 }
 
 // ------------------------------------------------------------------ the herd
 const animals = [];
 const geoCache = new Map();
+/* Sculpting a body takes a few hundred milliseconds, so new kinds are built in the background one at a time and each
+   animal appears as soon as its body is ready. */
+const geoQueue = [], geoWait = new Map(); let EMPTY = null;
+function geoFor(kind, bull, winter, apply) {
+  const key = kind + (bull ? 'B' : '') + (winter ? 'W' : '');
+  if (geoCache.has(key)) { apply(geoCache.get(key)); return; }
+  if (!geoWait.has(key)) { geoWait.set(key, []); geoQueue.push({ key, kind, bull, winter }); if (geoQueue.length === 1) setTimeout(buildNext, 30); }
+  geoWait.get(key).push(apply);
+}
+function buildNext() {
+  const job = geoQueue[0]; if (!job) return;
+  const g = buildGeometry(SPECIES[job.kind], rig(SPECIES[job.kind], job.bull), job.winter);
+  geoCache.set(job.key, g); for (const f of geoWait.get(job.key) || []) f(g); geoWait.delete(job.key);
+  geoQueue.shift(); if (geoQueue.length) setTimeout(buildNext, 40);
+}
 let furMat = null;
 const GAIT = { // leg phase offsets: LF, RF, LH, RH
   walk: [0.25, 0.75, 0.0, 0.5], trot: [0.0, 0.5, 0.5, 0.0], bound: [0.0, 0.08, 0.5, 0.58], amble: [0.0, 0.5, 0.25, 0.75], hop: [0.0, 0.0, 0.5, 0.5],
@@ -237,8 +340,14 @@ function spawn(kind, x, z, home, herd) {
   const winter = api.snow() > 0.5;
   const key = kind + (bull ? 'B' : '') + (winter ? 'W' : '');
   const rg = rig(spec, bull);
-  if (!geoCache.has(key)) geoCache.set(key, buildGeometry(spec, rg, winter));
-  const mesh = new T.SkinnedMesh(geoCache.get(key), furMat);
+  if (!EMPTY) { // a single invisible triangle stands in until the body is built
+    EMPTY = new T.BufferGeometry();
+    EMPTY.setAttribute('position', new T.Float32BufferAttribute(new Float32Array(9), 3)); EMPTY.setAttribute('normal', new T.Float32BufferAttribute([0, 1, 0, 0, 1, 0, 0, 1, 0], 3));
+    EMPTY.setAttribute('color', new T.Float32BufferAttribute(new Float32Array(9), 3)); EMPTY.setAttribute('skinIndex', new T.Uint16BufferAttribute(new Uint16Array(12), 4));
+    EMPTY.setAttribute('skinWeight', new T.Float32BufferAttribute([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0], 4)); EMPTY.setIndex([0, 1, 2]); EMPTY.computeBoundingSphere();
+  }
+  const mesh = new T.SkinnedMesh(EMPTY, furMat);
+  geoFor(kind, bull, winter, (g) => { mesh.geometry = g; });
   mesh.add(rg.root); mesh.updateMatrixWorld(true); mesh.bind(new T.Skeleton(rg.list));
   mesh.castShadow = true; mesh.receiveShadow = true; mesh.scale.setScalar(sc);
   mesh.name = 'wildlife-' + kind;
@@ -514,9 +623,7 @@ function frame(dt, time) {
   if (reskinT <= 0) {
     reskinT = 2; const winter = api.snow() > 0.5;
     for (const a of animals) if (a.winter !== winter && (a.kind === 'rabbit' || a.kind === 'deer' || a.kind === 'elk')) {
-      a.winter = winter; const key = a.kind + (a.bull ? 'B' : '') + (winter ? 'W' : '');
-      if (!geoCache.has(key)) geoCache.set(key, buildGeometry(a.spec, rig(a.spec, a.bull), winter));
-      a.mesh.geometry = geoCache.get(key);
+      a.winter = winter; geoFor(a.kind, a.bull, winter, (g) => { if (a.winter === winter) a.mesh.geometry = g; });
     }
   }
   for (const a of animals) {
@@ -631,11 +738,28 @@ function makeAnimal(kind, opts = {}) {
   return { animal: a, pose: (dt, time) => pose(a, dt, time) };
 }
 function initMaterial() {
-  furMat = new T.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
+  furMat = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0 });
   furMat.onBeforeCompile = (sh) => {
-    sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\nfloat rimK = pow(1.0 - clamp(dot(normalize(vNormal), normalize(vViewPosition)), 0.0, 1.0), 3.0); totalEmissiveRadiance += diffuseColor.rgb * rimK * 0.22;');
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vFurP;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvFurP = position;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+varying vec3 vFurP;
+float fh(vec3 p){ return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+float fn(vec3 p){ vec3 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+  return mix(mix(mix(fh(i), fh(i+vec3(1,0,0)), f.x), mix(fh(i+vec3(0,1,0)), fh(i+vec3(1,1,0)), f.x), f.y),
+             mix(mix(fh(i+vec3(0,0,1)), fh(i+vec3(1,0,1)), f.x), mix(fh(i+vec3(0,1,1)), fh(i+vec3(1,1,1)), f.x), f.y), f.z); }`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+  vec3 fp = vFurP * vec3(260.0, 260.0, 70.0);           // strands run along the body
+  float strand = fn(fp) * 0.6 + fn(fp * 2.3) * 0.4;
+  float furPatch = fn(vFurP * 9.0);
+  diffuseColor.rgb *= 0.8 + 0.32 * strand;
+  diffuseColor.rgb *= 0.93 + 0.14 * furPatch;`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+  { vec3 q = vFurP * vec3(220.0, 220.0, 60.0); float e = 0.35;
+    vec3 g = vec3(fn(q + vec3(e,0,0)) - fn(q - vec3(e,0,0)), fn(q + vec3(0,e,0)) - fn(q - vec3(0,e,0)), fn(q + vec3(0,0,e)) - fn(q - vec3(0,0,e)));
+    normal = normalize(normal + (mat3(viewMatrix) * g) * 0.28); }`)
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\nfloat rimK = pow(1.0 - clamp(dot(normalize(vNormal), normalize(vViewPosition)), 0.0, 1.0), 2.5); totalEmissiveRadiance += diffuseColor.rgb * rimK * 0.3;');
   };
-  furMat.customProgramCacheKey = () => 'wildlife-fur';
+  furMat.customProgramCacheKey = () => 'wildlife-fur-2';
 }
 
 window.GOAWildlife = { init, frame, open, isOpen, close() { open(false); }, species: SPECIES, animals, journal: () => journal,
