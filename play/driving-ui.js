@@ -1,7 +1,7 @@
 (() => {
  const $=id=>document.getElementById(id);
  const menu=document.createElement('section');menu.id='drive-menu';menu.className='card';menu.hidden=true;menu.setAttribute('role','dialog');menu.setAttribute('aria-label','Adventure menu');
- menu.innerHTML='<div class="sethead"><b>ADVENTURE MENU</b><button class="btn" id="drive-close">Resume drive</button></div><p class="drive-tip">Steer with the left arrows. Hold Gas to drive; hold Brake when stopped to reverse. Use two fingers to steer and accelerate together.</p><div id="drive-actions"></div><label class="drive-extra"><input type="checkbox" id="drive-extras"> Show Drift, Nitro & Ramp buttons</label>';
+ menu.innerHTML='<div class="sethead"><b>ADVENTURE MENU</b><button class="btn" id="drive-close">Resume drive</button></div><p class="drive-tip">Slide your left thumb on the steering pad. Hold GAS to drive; hold BRAKE when stopped to reverse. Tap OUT when stopped to walk, hunt and fish. Settings › Touch lets you switch to arrow buttons or tilt steering, and change button size.</p><div id="drive-actions"></div><label class="drive-extra"><input type="checkbox" id="drive-extras"> Show Drift, Nitro & Ramp buttons</label>';
  document.body.append(menu);
  const bar=document.createElement('div');bar.id='drive-bar';bar.innerHTML='<button class="chip" id="drive-open" aria-expanded="false" aria-controls="drive-menu">☰ Menu</button><button class="chip" id="drive-map">Map</button><button class="chip" id="drive-reset">Reset car</button>';document.body.append(bar);
  function clear(){document.dispatchEvent(new Event('goa-clear-input'));document.querySelectorAll('.tb.on').forEach(el=>el.classList.remove('on'));}

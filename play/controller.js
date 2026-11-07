@@ -1,6 +1,7 @@
 (function(){
  'use strict';
  const core=window.GOAControllerCore;
+ let lastSource='',rawPad=null,family='',previousAnnounced=false;
  let previous=core.empty(),state=core.empty(),activeIndex=-1,focused=true,blocked=true,navAt=0,navDirection='',hooks=null,scopeBefore=null;
  const status=document.createElement('div');status.id='controller-status';status.setAttribute('role','status');document.body.append(status);
  const clear=()=>{previous=core.empty();state=core.empty();blocked=true;};
@@ -26,15 +27,19 @@
  function accept(scope){let el=document.activeElement;if(!scope.contains(el)||!visible(el)){el=items(scope)[0];focusItem(el);}if(!el)return;if(el.id==='bigc'){hooks.mapPlace();return;}if(el.matches('button,a,summary,input[type=checkbox],input[type=radio]'))el.click();}
  function poll(dt){
   let pads=[];try{pads=navigator.getGamepads?Array.from(navigator.getGamepads()):[];}catch{}
-  const usable=pads.filter(p=>p?.connected&&p.mapping==='standard');
-  const operated=usable.find(p=>p.buttons.some(b=>b.pressed||b.value>.15)||p.axes.some(a=>Math.abs(a)>.3));
-  let pad=operated||usable.find(p=>p.index===activeIndex)||usable[0]||pads.find(p=>p?.connected);
+  const usable=pads.filter(p=>p?.connected).map(core.normalize); // Xbox and PlayStation pads in any browser layout
+  const operated=usable.find(p=>p.buttons.some(b=>b.pressed||b.value>.15)||p.axes.slice(0,4).some(a=>Math.abs(a)>.3));
+  let pad=operated||usable.find(p=>p.index===activeIndex)||usable[0]||null;
+  if(operated){lastSource='pad';rawPad=operated.raw||operated;}else if(pad&&!rawPad)rawPad=pad.raw||pad;
   if(!focused||document.hidden)pad=null;
   state=core.sample(pad,previous);
   if(state.connected&&state.index!==activeIndex){activeIndex=state.index;blocked=true;}
   if(previous.connected&&!state.connected){hooks?.pause();clear();activeIndex=-1;status.textContent='Controller disconnected · paused';return;}
   previous=state;
-  status.textContent=state.connected?(state.standard?(state.id.toLowerCase().includes('xbox')?'Xbox controller connected':/dual|playstation|sony|054c/i.test(state.id)?'PlayStation controller connected':'Controller connected'):'Controller mapping unsupported · use keyboard or touch'):'Controller ready · connect and press a button';
+  family=state.connected?state.family:'';
+  const text=state.connected?(family==='xbox'?'Xbox controller connected':family==='ps'?'PlayStation controller connected':'Controller connected'):'Controller ready · connect and press a button';
+  if(text!==status.textContent){status.textContent=text;if(state.connected&&!previousAnnounced){previousAnnounced=true;hooks?.toast?.(text+' · '+(family==='ps'?'✕':'A')+' interacts, '+(family==='ps'?'△':'Y')+' gets in or out',3);}}
+  if(!state.connected)previousAnnounced=false;
   if(!state.connected||!state.standard||!hooks)return;
   const scope=hooks.scope();
   if(scope!==scopeBefore){scopeBefore=scope;blocked=true;navDirection='';if(scope)focusItem(scope.id==='bigmap'?document.getElementById('bigc'):items(scope)[0]);}
@@ -51,15 +56,23 @@
   }
   if(state.pressed[9]){hooks.pause();return;}if(state.pressed[8]){hooks.map();return;}
   if(hooks.onFoot?.()){hooks.footPad?.(state,pad);return;}
-  if(state.pressed[14]){hooks.exitVehicle?.();return;}
+  if(state.pressed[14]||state.pressed[3]&&hooks.slow?.()){hooks.exitVehicle?.();return;}
   // Require neutral controls after reconnecting or closing a menu.
   if(blocked){if(state.throttle<.05&&state.brake<.05&&!state.buttons[0]&&!state.buttons[1]&&Math.abs(state.steer)<.05)blocked=false;else return;}
-  if(state.pressed[2])hooks.reset();if(state.pressed[3])hooks.camera();
+  if(state.pressed[2])hooks.reset();if(state.pressed[3]||state.pressed[15])hooks.camera();
   if(state.pressed[4])hooks.vehicle(-1);if(state.pressed[5])hooks.vehicle(1);
   if(state.pressed[12])hooks.ramp();if(state.pressed[13])hooks.rampKind();
   if(state.pressed[11])hooks.camp?.();
  }
- window.GOAController={setHooks(value){hooks=value;},poll,input(){return blocked||!focused||!state.standard?core.empty():state;},diagnostics(){return {...state,blocked};}};
+ const LABELS={xbox:{interact:'A',fire:'RT',aim:'LT',reload:'X',drive:'Y',switch:'LB / RB',menu:'Menu',melee:'B'},ps:{interact:'✕',fire:'R2',aim:'L2',reload:'□',drive:'△',switch:'L1 / R1',menu:'Options',melee:'○'},
+  generic:{interact:'A',fire:'RT',aim:'LT',reload:'X',drive:'Y',switch:'LB / RB',menu:'Start',melee:'B'},kb:{interact:'E',fire:'Left click',aim:'Right click',reload:'R',drive:'F',switch:'Tab',menu:'Esc',melee:'Left click'},
+  touch:{interact:'USE',fire:'FIRE',aim:'AIM',reload:'⟳',drive:'CAR',switch:'⇄',menu:'Menu',melee:'FIRE'}};
+ function source(){if(lastSource==='pad'&&state.connected)return family||'generic';if(lastSource==='touch'||(!lastSource&&document.body.classList.contains('touch')))return 'touch';return 'kb';}
+ addEventListener('keydown',()=>{lastSource='kb';},true);addEventListener('mousedown',()=>{if(lastSource!=='touch')lastSource='kb';},true);
+ addEventListener('pointerdown',e=>{if(e.pointerType==='touch')lastSource='touch';},true);
+ function rumble(strength=.6,ms=120){try{const a=rawPad?.vibrationActuator;if(lastSource!=='pad'||!a)return;if(a.playEffect)a.playEffect('dual-rumble',{duration:ms,strongMagnitude:Math.min(1,strength),weakMagnitude:Math.min(1,strength*.7)}).catch(()=>{});else a.pulse?.(strength,ms);}catch{}}
+ window.GOAController={setHooks(value){hooks=value;},poll,source,family:()=>family,label:(action)=>(LABELS[source()]||LABELS.kb)[action]||'',
+  hint:(action)=>{const l=(LABELS[source()]||LABELS.kb)[action];return action==='drive'?`${l} to ${window.GOAPlayer?.onFoot?.()?'drive':'step out'}`:l;},rumble,input(){return blocked||!focused||!state.standard?core.empty():state;},diagnostics(){return {...state,blocked};}};
  addEventListener('blur',()=>{focused=false;clear();hooks?.pause();});addEventListener('focus',()=>{focused=true;clear();});
  document.addEventListener('visibilitychange',()=>{if(document.hidden){clear();hooks?.pause();}});
  addEventListener('gamepaddisconnected',event=>{if(event.gamepad.index===activeIndex){clear();activeIndex=-1;hooks?.pause();status.textContent='Controller disconnected · paused';}});

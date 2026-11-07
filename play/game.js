@@ -67,7 +67,7 @@ function prefDefaults() {
     showMap: true, showDial: true, showLap: true, showSurface: true,
     camMode: 0, camDist: tv('camdistance', 6.4), camHeight: tv('camheight', 1.9), fov: 58, camShake: true,
     quality: 'high', ...QUALITY.high, weatherAmt: 1, tod: 'season',
-    volume: 0.8, engineVol: 1, ambVol: 1, touchShow: 'auto', touchSize: 'normal', hudScale: 1, roadRamps: true, rampKind: 'kicker', infNitro: false,
+    volume: 0.8, engineVol: 1, ambVol: 1, touchShow: 'auto', touchSize: 'normal', touchSteer: 'wheel', hudScale: 1, roadRamps: true, rampKind: 'kicker', infNitro: false,
   };
 }
 Object.assign(P, prefDefaults());
@@ -1773,6 +1773,7 @@ const TABS = {
     { type: 'head', label: 'Touch' },
     { k: 'touchShow', label: 'Touch buttons', type: 'choice', options: [['auto', 'Automatic'], ['on', 'Always'], ['off', 'Never']] },
     { k: 'touchSize', label: 'Touch button size', type: 'choice', options: [['small', 'Small'], ['normal', 'Normal'], ['large', 'Large']] },
+    { k: 'touchSteer', label: 'Touch steering', type: 'choice', options: [['wheel', 'Slide pad'], ['buttons', 'Arrow buttons'], ['tilt', 'Tilt phone']], hint: 'Slide pad: put your thumb on the pad and slide left or right. Tilt: hold the phone sideways and tilt it like a wheel.' },
   ] },
   mods: { label: 'Mods', rows: [
     { k: 'infNitro', label: 'Unlimited nitro', type: 'toggle', hint: 'The tank stays full and never drains. Laps driven with it on are not put on the lap board.' },
@@ -1949,6 +1950,7 @@ function applyPrefs() {
   if (grass) { const n = Math.floor(grassMax * P.grass); if (n !== grass.count) { grass.count = n; grass.visible = n > 0; updateGrass(S.x, S.z, true); } }
   const showTouch = P.touchShow === 'on' || (P.touchShow === 'auto' && (isTouch || sawTouch));
   document.body.classList.toggle('touch', showTouch);
+  document.body.dataset.steer = P.touchSteer || 'wheel'; window.GOATouch?.setSteer?.(P.touchSteer || 'wheel');
   document.body.classList.toggle('tsmall', P.touchSize === 'small'); document.body.classList.toggle('tlarge', P.touchSize === 'large');
   document.body.classList.toggle('nohand', !P.handbrake);
   $('hud').style.zoom = P.hudScale;
@@ -2306,7 +2308,7 @@ function physics(dt) {
   const pad = window.GOAXR?.driveInput?.() || window.GOAController?.input() || {}; // VR controllers drive through the same input
   const inp = S.ctrl && !$('settings').classList.contains('open') && !mapOpen() ? {
     g: Math.max(keys.g || 0, touch.g, pad.throttle || 0), b: Math.max(keys.b || 0, touch.b, pad.brake || 0), d: P.handbrake ? Math.max(keys.d || 0, touch.d, pad.handbrake || 0) : 0,
-    st: clamp((Math.max(keys.r || 0, touch.r) - Math.max(keys.l || 0, touch.l)) + (pad.steer || 0), -1, 1), n: Math.max(keys.n || 0, touch.n, pad.nitro || 0),
+    st: clamp((Math.max(keys.r || 0, touch.r) - Math.max(keys.l || 0, touch.l)) + (pad.steer || 0) + (window.GOATouch?.steer?.() || 0), -1, 1), n: Math.max(keys.n || 0, touch.n, pad.nitro || 0),
   } : { g: 0, b: 0, d: 0, st: 0, n: 0 };
   if (S.crash > 0) return crashStep(dt);
   if (S.air) return airStep(dt, inp);
@@ -3045,7 +3047,8 @@ async function boot() {
   let cursorX=.5,cursorY=.5;
   function mapCursor(){const r=bigC.getBoundingClientRect(),p=$('bigmap').getBoundingClientRect();cursor.style.left=(r.left-p.left+r.width*cursorX)+'px';cursor.style.top=(r.top-p.top+r.height*cursorY)+'px';cursor.style.display=mapOpen()?'block':'none';}
   function currentScope(){if(window.GOADriveUI?.isOpen())return $('drive-menu');if(window.GOAXR.previewActive())return $('xr-overlay');if(window.GOAXR.isOpen())return $('xr-panel');if(window.GOALocations.isOpen())return $('destinations');if(window.GOAWildlife?.isOpen())return $('journal');if(window.GOACampLife?.isOpen())return $('adventure');if(window.GOAExtension.isOpen())return $('expedition');if($('board').style.display==='block')return $('board');if($('summary').style.display==='block')return $('summary');if(mapOpen())return $('bigmap');if($('settings').classList.contains('open'))return $('settings');if(!S.started)return $('title');if($('build').classList.contains('open'))return $('build');return null;}
-  window.GOAController.setHooks({scope:currentScope,onFoot(){return !!window.GOAPlayer?.onFoot();},footPad(state,pad){window.GOAPlayer?.pad(state,pad);},exitVehicle(){window.GOAPlayer?.exitVehicle();},
+  window.GOAToast=toast;window.GOAGame={S};window.GOAStart=()=>{if(!S.started)begin();};
+  window.GOAController.setHooks({scope:currentScope,toast,slow(){return Math.hypot(S.vx,S.vz)<1.5&&!S.air;},onFoot(){return !!window.GOAPlayer?.onFoot();},footPad(state,pad){window.GOAPlayer?.pad(state,pad);},exitVehicle(){window.GOAPlayer?.exitVehicle();},
    pause(){if(S.started&&S.ctrl)openSettings(true);},
    back(){const s=currentScope();if(s?.id==='drive-menu')window.GOADriveUI.close();else if(s?.id==='xr-overlay')window.GOAXR.end();else if(s?.id==='xr-panel')window.GOAXR.close();else if(s?.id==='destinations')window.GOALocations.close();else if(s?.id==='journal')window.GOAWildlife.close();else if(s?.id==='adventure')window.GOACampLife.close();else if(s?.id==='expedition')window.GOAExtension.close();else if(s?.id==='bigmap')openMap(false);else if(s?.id==='settings')openSettings(false);else if(s?.id==='board')$('board').style.display='none';else if(s?.id==='build')$('build').classList.remove('open');},
    map(){window.GOAXR.close();window.GOALocations.close();window.GOAWildlife?.close();window.GOAExtension.close();openSettings(false);openMap();mapCursor();},

@@ -1,6 +1,6 @@
 # Great Outdoors Adventure — controller controls
 
-Connect an Xbox controller, DualShock 4 or DualSense using USB or Bluetooth. Open the game in a browser that exposes it using the standard Gamepad API mapping. Focus the game and press a button to let the browser detect it. Use HTTPS or localhost. Controller support in a browser does not make this a native Xbox or PlayStation console release.
+Connect an Xbox controller, DualShock 4 or DualSense using USB or Bluetooth, then press any button so the browser detects it. A message confirms whether it is an Xbox or PlayStation controller, and the on-screen prompts switch to that pad's buttons (A / ✕, Y / △ and so on). Chrome, Edge and Safari report these pads in the standard layout; when a browser reports a raw layout (Firefox, some Bluetooth PlayStation pads, Xbox pads on Linux), the game translates it so the same buttons do the same things. Pads that support it rumble when you fire or get hurt. Use HTTPS or localhost. Controller support in a browser does not make this a native Xbox or PlayStation console release.
 
 | Action | Xbox | PlayStation |
 | --- | --- | --- |
@@ -11,7 +11,8 @@ Connect an Xbox controller, DualShock 4 or DualSense using USB or Bluetooth. Ope
 | Handbrake | A | Cross |
 | Nitro | B | Circle |
 | Reset to road | X | Square |
-| Camera mode | Y | Triangle |
+| Camera mode | D-pad Right | D-pad Right |
+| Step out (when stopped) | Y | Triangle |
 | Look around | Right stick | Right stick |
 | Previous / next vehicle | LB / RB | L1 / R1 |
 | Deploy / pack camp, while stopped | R3 | R3 |
@@ -21,7 +22,7 @@ Connect an Xbox controller, DualShock 4 or DualSense using USB or Bluetooth. Ope
 | Open / close map | View | Share / Create |
 | Menu navigation | D-pad / left stick | D-pad / left stick |
 | Back from panel | B | Circle |
-| Step out of / into the vehicle | D-pad Left | D-pad Left |
+| Step out of / into the vehicle | Y or D-pad Left | Triangle or D-pad Left |
 
 On the map, the left stick moves the marker cursor while the map canvas is focused; A / Cross sets a marker. Use the D-pad to reach the clear marker, go to marker and close buttons. In menus, left/right changes sliders and dropdowns; A / Cross activates buttons and camping checkboxes.
 
@@ -41,9 +42,17 @@ Wildlife: deer, elk, black bears, red foxes, hares and coyotes live around Long 
 
 Retexture: ground and roads now use a matching normal map per surface (grass, dry grass, dirt, gravel, rock, snow, asphalt, snowy asphalt), blended with the same weights as the colours; cliffs use triplanar rock normals. Dirt and snowy-road textures are Poly Haven CC0 sets. See CREDITS.html.
 
+## Phones and tablets
+
+The touch buttons appear automatically on phones and tablets (Settings › Touch can force them on or off, and make them smaller or larger). Landscape works best.
+
+**Driving.** Put your left thumb on the **steering pad** and slide it left or right: the further you slide, the harder you steer, and it centres when you let go. Hold the tall **GAS** pedal to drive and **BRAKE** to slow down (hold it when stopped to reverse). Tap **OUT** when stopped to walk. Settings › Touch › Touch steering switches to **arrow buttons** or **tilt** (hold the phone sideways like a wheel; tap **TILT** to centre it — iPhones ask for motion access on the first tap). Drift, Nitro and Ramp buttons can be turned on from the Menu.
+
+**On foot.** Touch anywhere on the left side and drag: a thumbstick appears under your thumb. Push it to the edge to sprint. Drag anywhere on the right side to look around. **FIRE** fires, casts or swings (and you can slide your thumb on it to keep tracking an animal). **AIM** toggles aiming and the scope. **USE** appears when there is something to do (tag, cook, talk, gather, drive) and shows what it will do. **⟳** reloads, **⇄** switches item and **CAR** gets back in the vehicle.
+
 ## On foot
 
-Stop and press **F** (controller: **D-pad Left**) to step out as your chosen character. Press F again (or Y / Triangle) beside the vehicle to drive.
+Stop and press **F** (controller: **Y / Triangle** or **D-pad Left**; phone: **OUT**) to step out as your chosen character. Press F again (or Y / Triangle, or A / Cross on the Drive prompt; phone: **CAR** or **USE**) beside the vehicle to drive.
 
 | Action | Keyboard & mouse | Xbox | PlayStation |
 | --- | --- | --- | --- |
@@ -53,7 +62,9 @@ Stop and press **F** (controller: **D-pad Left**) to step out as your chosen cha
 | Fire / cast / reel | Left mouse or Space (hold to reel) | RT | R2 |
 | Reload | R | X | Square |
 | Interact (tag, cook, talk, open, gather, fill…) | E | A | Cross |
-| Switch weapon / rod / knife | Tab, mouse wheel or 1–6 | LB / RB | L1 / R1 |
+| Switch weapon / rod / hatchet / knife | Tab, mouse wheel or 1–6 | LB / RB | L1 / R1 |
+| Quick knife or hatchet swing | — | B | Circle |
+| Adventure panel | G | D-pad Up | D-pad Up |
 | Eat or drink | H | — | — |
 | Back to the vehicle | F | Y or D-pad Left | Triangle or D-pad Left |
 

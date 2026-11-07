@@ -1,0 +1,68 @@
+/* Phone and tablet controls (touch-controls.js). Loaded last so it can reshape the driving buttons. */
+body{--ts:1}
+body.tsmall{--ts:.84}
+body.tlarge{--ts:1.2}
+
+/* ---------------- driving */
+#tSteer,#tTilt,#tOut{display:none}
+body.touch #tSteer{display:flex}
+body.touch[data-steer="buttons"] #tSteer,body.touch[data-steer="tilt"] #tSteer{display:none}
+body.touch[data-steer="wheel"] #tLeft,body.touch[data-steer="wheel"] #tRight,body.touch[data-steer="tilt"] #tLeft,body.touch[data-steer="tilt"] #tRight{display:none}
+body.touch[data-steer="tilt"] #tTilt{display:flex}
+body.touch #tOut{display:flex}
+
+body.touch #tSteer{left:max(12px,env(safe-area-inset-left));bottom:max(16px,env(safe-area-inset-bottom));width:calc(clamp(180px,36vw,300px)*var(--ts));height:calc(88px*var(--ts));border-radius:calc(44px*var(--ts));
+  background:rgba(242,238,230,.42);border:2px solid #f2eee6aa;position:fixed;overflow:hidden;align-items:center;justify-content:center}
+#tSteer span{position:absolute;bottom:4px;left:0;right:0;text-align:center;font-size:10px;letter-spacing:.18em;color:rgba(30,34,38,.55);pointer-events:none}
+#tSteer i{position:absolute;left:50%;top:14%;bottom:14%;width:2px;background:rgba(30,34,38,.25);pointer-events:none}
+#tSteer b{width:calc(68px*var(--ts));height:calc(68px*var(--ts));border-radius:50%;background:#f2eee6;border:2px solid rgba(30,34,38,.35);box-shadow:0 3px 8px rgba(0,0,0,.25);pointer-events:none;transition:transform .06s linear}
+#tSteer.on b{background:#efc565;transition:none}
+body.touch #tTilt{left:max(12px,env(safe-area-inset-left));bottom:max(16px,env(safe-area-inset-bottom));width:calc(120px*var(--ts));height:calc(72px*var(--ts));border-radius:36px;flex-direction:column;gap:2px}
+#tTilt small{font-size:9px;letter-spacing:.06em;font-weight:600;opacity:.7}
+
+/* tall pedals: gas on the edge, brake beside it */
+body.touch #tGas{width:calc(92px*var(--ts));height:calc(140px*var(--ts));border-radius:22px;right:max(12px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));font-size:15px;background:#d5e5bfe6}
+body.touch #tBrake{width:calc(84px*var(--ts));height:calc(106px*var(--ts));border-radius:20px;right:calc(max(12px,env(safe-area-inset-right)) + 104px*var(--ts));bottom:max(16px,env(safe-area-inset-bottom));font-size:13px;background:#f0d2c8e6}
+body.touch #tOut{right:calc(max(12px,env(safe-area-inset-right)) + 112px*var(--ts));bottom:calc(max(16px,env(safe-area-inset-bottom)) + 118px*var(--ts));width:calc(64px*var(--ts));height:calc(48px*var(--ts));border-radius:24px;font-size:13px;background:#f2eee6dd}
+body.touch #tOut.dim{opacity:.45}
+body.touch.drive-extras #tDrift{right:max(12px,env(safe-area-inset-right));bottom:calc(max(16px,env(safe-area-inset-bottom)) + 152px*var(--ts))}
+body.touch.drive-extras #tNitro{right:calc(max(12px,env(safe-area-inset-right)) + 60px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 182px*var(--ts))}
+body.touch.drive-extras #tRamp{left:max(12px,env(safe-area-inset-left));bottom:calc(max(16px,env(safe-area-inset-bottom)) + 100px*var(--ts))}
+
+/* ---------------- on foot */
+#foot-touch{display:none}
+body.touch.on-foot #touch{display:none!important}
+body.touch.on-foot #foot-touch{display:block}
+body.drive-menu-open #foot-touch,body.xr-active #foot-touch{display:none!important}
+#ft-look{position:fixed;top:0;bottom:0;right:0;left:42vw;z-index:31;touch-action:none}
+#ft-move{position:fixed;left:0;bottom:0;width:42vw;height:62vh;z-index:32;touch-action:none}
+#ft-move>span{position:absolute;left:max(18px,env(safe-area-inset-left));bottom:calc(max(14px,env(safe-area-inset-bottom)) + 4px);font:600 10px/1 Barlow,system-ui,sans-serif;letter-spacing:.2em;color:#f0eddfaa;pointer-events:none}
+#ft-base{position:absolute;left:calc(max(14px,env(safe-area-inset-left)) + 72px*var(--ts));top:calc(100% - max(16px,env(safe-area-inset-bottom)) - 76px*var(--ts));width:calc(128px*var(--ts));height:calc(128px*var(--ts));transform:translate(-50%,-50%);border-radius:50%;
+  background:rgba(242,238,230,.18);border:2px solid rgba(242,238,230,.55);pointer-events:none}
+#ft-move.on #ft-base{background:rgba(242,238,230,.28)}
+#ft-move.run #ft-base{border-color:#efc565}
+#ft-knob{position:absolute;left:50%;top:50%;width:calc(56px*var(--ts));height:calc(56px*var(--ts));margin:calc(-28px*var(--ts)) 0 0 calc(-28px*var(--ts));border-radius:50%;background:rgba(242,238,230,.85);box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.ftb{position:fixed;z-index:33;touch-action:none;user-select:none;-webkit-user-select:none;border-radius:50%;border:2px solid #f2eee6aa;background:rgba(242,238,230,.72);color:#1e2226;
+  font:700 13px/1 Barlow,system-ui,sans-serif;letter-spacing:.08em;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(0,0,0,.2);padding:0}
+.ftb.on{background:#efc565}
+.ftb[hidden]{display:none}
+.ftb.sm{width:calc(52px*var(--ts));height:calc(52px*var(--ts));font-size:16px}
+#ft-car.sm{font-size:11px}
+#ft-fire{width:calc(96px*var(--ts));height:calc(96px*var(--ts));right:max(14px,env(safe-area-inset-right));bottom:max(18px,env(safe-area-inset-bottom));background:rgba(234,120,80,.82);color:#fff;font-size:15px}
+#ft-aim{width:calc(68px*var(--ts));height:calc(68px*var(--ts));right:calc(max(14px,env(safe-area-inset-right)) + 108px*var(--ts));bottom:calc(max(18px,env(safe-area-inset-bottom)) + 8px)}
+#ft-aim.lock{background:#efc565;border-color:#fff}
+#ft-use{right:max(14px,env(safe-area-inset-right));bottom:calc(max(18px,env(safe-area-inset-bottom)) + 108px*var(--ts));border-radius:26px;min-width:calc(96px*var(--ts));height:calc(50px*var(--ts));padding:0 14px;background:rgba(255,214,138,.92);font-size:12px;max-width:44vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#ft-reload{right:calc(max(14px,env(safe-area-inset-right)) + 120px*var(--ts));bottom:calc(max(18px,env(safe-area-inset-bottom)) + 88px*var(--ts))}
+#ft-swap{right:calc(max(14px,env(safe-area-inset-right)) + 182px*var(--ts));bottom:calc(max(18px,env(safe-area-inset-bottom)) + 20px)}
+#ft-car{right:max(14px,env(safe-area-inset-right));bottom:calc(max(18px,env(safe-area-inset-bottom)) + 170px*var(--ts))}
+/* move the on-foot HUD out of the thumbs' way */
+body.touch.on-foot #fh-weapon{top:max(12px,env(safe-area-inset-top));bottom:auto;right:auto;left:50%;transform:translateX(-50%);min-width:0;padding:6px 12px;text-align:center;max-width:46vw}
+body.touch.on-foot #fh-tip{display:none}
+body.touch.on-foot #fh-bars{top:calc(max(12px,env(safe-area-inset-top)) + 96px);bottom:auto;left:max(12px,env(safe-area-inset-left));min-width:120px;padding:6px 8px;font-size:9px}
+body.touch.on-foot #fh-prompt{bottom:auto;top:30%}
+@media (max-height:460px){
+  #ft-use{bottom:calc(max(12px,env(safe-area-inset-bottom)) + 96px*var(--ts))}
+  #ft-car{bottom:auto;top:calc(max(12px,env(safe-area-inset-top)) + 64px)}
+  body.touch #tOut{bottom:calc(max(16px,env(safe-area-inset-bottom)) + 112px*var(--ts))}
+}
+@media (max-width:600px){body.touch.on-foot #fh-weapon{top:calc(max(12px,env(safe-area-inset-top)) + 62px)}body.touch.on-foot #fh-bars{top:calc(max(12px,env(safe-area-inset-top)) + 150px)}}

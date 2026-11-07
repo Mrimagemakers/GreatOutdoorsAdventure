@@ -4,10 +4,12 @@ Open the game over HTTPS (the published site) or localhost. Choose **VR / AR** f
 
 ## VR: drive, walk and hunt
 
+**Comfort.** The VR menu (B) has two switches, remembered on your headset: **Turning** (snap 30° or smooth) and **Comfort vignette**, which darkens the edges of your view while you walk, turn or swerve to reduce motion sickness. It is on by default.
+
 Connect a headset and use a browser that supports immersive WebXR VR. Choose **Enter VR**. Point a controller at the floating menu and pull the trigger to choose a mode; **B / Y** shows or hides the menu.
 
-- **Drive · chase view** follows behind the vehicle. **Drive · driver seat** puts you in the cab; click the right stick to recentre. Right trigger gas, left trigger brake, left stick steer, right grip handbrake, A nitro, X reset to the road. A wrist display on the left controller shows speed and controls.
-- **Walk & hunt on foot**: left stick walks where you look, right stick snap-turns 30°, right trigger fires (or casts and reels with the rod), A interacts (tag, cook, open caches, fill canteen…), X reloads, Y switches weapon / rod / knife. Your weapon is held in your right hand; the wrist display shows ammunition, health, Survival needs and the current prompt.
+- **Drive · chase view** follows behind the vehicle. **Drive · driver seat** puts you in the cab; click the right stick to recentre. Right trigger gas, left trigger brake (or push the right stick forward and back), either stick steers, right grip handbrake, A nitro, X reset to the road, **Y steps out** when stopped. A wrist display on the left controller shows speed and controls.
+- **Walk & hunt on foot**: left stick walks where you look (click it to sprint), right stick turns (snap 30° by default, or smooth), right trigger fires (or casts and reels with the rod), A interacts (tag, cook, open caches, fill canteen…) and **gets in the truck** at the Drive prompt, X reloads, Y switches weapon / rod / hatchet / knife, B opens the menu. Your weapon is held in your right hand; the wrist display shows ammunition, health, Survival needs and the current prompt.
 - **Lookout (paused)** is the original stationary viewpoint; River Valley and Snowy Mountain jump there.
 
 ## Hunt in augmented reality

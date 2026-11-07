@@ -3,6 +3,8 @@
  let api,T,mode='none',session=null,pending=false,snapshot=null,rig=null,menu=null,arScene=null,stage=null,model=null,reticle=null,hitSource=null,viewerSpace=null,localSpace=null,previewCamera=null,placed=false,hitReady=false,floorSpace=true,snapHeld=false;
  let supported={vr:false,ar:false},scale=.006,turn=0,dragX=null;
  // VR play and AR hunting state
+ let comfort={smooth:false,vignette:true};try{Object.assign(comfort,JSON.parse(localStorage.getItem('goa-vr-comfort-v1')||'{}'));}catch{}
+ let vignette=null,turnRate=0;
  let vrPlay='look',prevBtn={},chaseYaw=0,rigYaw=0,seatOff=null,handWeapon=null,handItem='',wrist=null,wristT=0,driveIn=null,hunt=null;
  const controllers=[],clickable=[],$=id=>document.getElementById(id),point={x:0,y:0,z:0};
  const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
@@ -13,6 +15,7 @@
  function save(){snapshot={parent:api.camera.parent,position:api.camera.position.clone(),quaternion:api.camera.quaternion.clone(),near:api.camera.near,far:api.camera.far,fov:api.camera.fov,clearColor:api.renderer.getClearColor(new T.Color()),clearAlpha:api.renderer.getClearAlpha()};api.clearInput();api.stop();api.openSettings(false);panel(false);document.body.classList.add('xr-active');$('xr-overlay').classList.add('active');}
  function restore(){
   try{hitSource?.cancel();}catch{}hitSource=null;viewerSpace=localSpace=null;hitReady=false;placed=false;
+  if(vignette){api.camera.remove(vignette);dispose(vignette);vignette=null;}
   if(rig){rig.remove(api.camera);if(snapshot?.parent)snapshot.parent.add(api.camera);api.scene.remove(rig);for(const c of controllers)rig.remove(c);if(menu){rig.remove(menu);dispose(menu);}rig=null;menu=null;clickable.length=0;}
   if(arScene){if(model){stage?.remove(model);dispose(model);}arScene.remove(stage,reticle);dispose(reticle);arScene=null;stage=model=reticle=previewCamera=null;}
   if(snapshot){api.camera.position.copy(snapshot.position);api.camera.quaternion.copy(snapshot.quaternion);api.camera.near=snapshot.near;api.camera.far=snapshot.far;api.camera.fov=snapshot.fov;api.camera.updateProjectionMatrix();api.renderer.setClearColor(snapshot.clearColor,snapshot.clearAlpha);snapshot=null;}
@@ -28,14 +31,20 @@
   else {const results=await Promise.allSettled([navigator.xr.isSessionSupported('immersive-vr'),navigator.xr.isSessionSupported('immersive-ar')]);supported.vr=results[0].status==='fulfilled'&&results[0].value;supported.ar=results[1].status==='fulfilled'&&results[1].value;message(supported.vr||supported.ar?'Supported modes are ready. Choose Enter VR or Enter AR.':'No immersive headset or AR session is available in this browser. You can still try the tabletop preview.');}
   $('xr-vr').disabled=!supported.vr||pending;$('xr-ar').disabled=!supported.ar||pending;$('xr-arhunt').disabled=!supported.ar||pending;$('xr-arhunt').textContent=supported.ar?'Hunt in AR':'AR unavailable';$('xr-vr').textContent=supported.vr?'Enter VR':'VR unavailable';$('xr-ar').textContent=supported.ar?'Enter AR':'AR unavailable';
  }
- function button3D(text,y,action){const c=document.createElement('canvas');c.width=768;c.height=128;const g=c.getContext('2d');g.fillStyle='#213b2d';g.fillRect(0,0,768,128);g.strokeStyle='#d8c493';g.lineWidth=8;g.strokeRect(4,4,760,120);g.fillStyle='#f0eddf';g.textAlign='center';g.textBaseline='middle';g.font='bold 37px sans-serif';g.fillText(text,384,64);const texture=new T.CanvasTexture(c),mesh=own(new T.Mesh(new T.PlaneGeometry(1.15,.19),new T.MeshBasicMaterial({map:texture,side:T.DoubleSide})));mesh.position.set(0,y,-2);mesh.userData.action=action;menu.add(mesh);clickable.push(mesh);}
+ function drawButton(c,text){const g=c.getContext('2d');g.fillStyle='#213b2d';g.fillRect(0,0,768,128);g.strokeStyle='#d8c493';g.lineWidth=8;g.strokeRect(4,4,760,120);g.fillStyle='#f0eddf';g.textAlign='center';g.textBaseline='middle';g.font='bold 37px sans-serif';g.fillText(text,384,64);}
+ function button3D(text,y,action){const c=document.createElement('canvas');c.width=768;c.height=128;drawButton(c,text);const texture=new T.CanvasTexture(c),mesh=own(new T.Mesh(new T.PlaneGeometry(1.15,.19),new T.MeshBasicMaterial({map:texture,side:T.DoubleSide})));mesh.position.set(0,y,-2);mesh.userData.action=action;mesh.userData.relabel=(t)=>{drawButton(c,t);texture.needsUpdate=true;};menu.add(mesh);clickable.push(mesh);return mesh;}
+ const turnLabel=()=>'Turning: '+(comfort.smooth?'smooth':'snap 30°'),vigLabel=()=>'Comfort vignette: '+(comfort.vignette?'on':'off');
+ function saveComfort(){try{localStorage.setItem('goa-vr-comfort-v1',JSON.stringify(comfort));}catch{}}
  function positionRig(){const s=api.S;rig.position.set(s.x+Math.cos(s.yaw)*5,api.groundY(s.x+Math.cos(s.yaw)*5,s.z-Math.sin(s.yaw)*5)+(floorSpace?0:1.65),s.z-Math.sin(s.yaw)*5);rig.rotation.y=s.yaw+Math.PI;api.camera.position.set(0,0,0);api.camera.quaternion.identity();}
  function viewpoint(id){if(mode!=='vr')return;api.travel(id);api.clearInput();positionRig();message('VR lookout: '+window.GOALocations.list().find(p=>p.id===id).name+'. Trigger selects menu buttons; grip exits.');}
  function buildVR(){
   rig=new T.Group();rig.name='VR viewer origin';api.scene.add(rig);rig.add(api.camera);api.camera.near=.05;api.camera.updateProjectionMatrix();positionRig();
   menu=new T.Group();rig.add(menu);
   button3D('Drive · chase view',2.2,()=>setVRPlay('drive-chase'));button3D('Drive · driver seat',1.98,()=>setVRPlay('drive-seat'));button3D('Walk & hunt on foot',1.76,()=>setVRPlay('walk'));button3D('Lookout (paused)',1.54,()=>setVRPlay('look'));
-  button3D('River Valley',1.28,()=>viewpoint('river-valley'));button3D('Snowy Mountain',1.06,()=>viewpoint('snowy-mountain'));button3D('Exit VR',.84,end);
+  const tb=button3D(turnLabel(),1.28,()=>{comfort.smooth=!comfort.smooth;saveComfort();tb.userData.relabel(turnLabel());});
+  const vb=button3D(vigLabel(),1.06,()=>{comfort.vignette=!comfort.vignette;saveComfort();vb.userData.relabel(vigLabel());});
+  button3D('River Valley',.84,()=>viewpoint('river-valley'));button3D('Snowy Mountain',.62,()=>viewpoint('snowy-mountain'));button3D('Exit VR',.40,end);
+  vignette=own(new T.Mesh(new T.RingGeometry(.15,.9,48,1),new T.MeshBasicMaterial({color:0x000000,transparent:true,opacity:0,depthTest:false,depthWrite:false})));vignette.position.z=-.3;vignette.renderOrder=999;vignette.visible=false;api.camera.add(vignette);
   wrist=makeWrist();
   for(const c of controllers){rig.add(c);c.visible=true;}
  }
@@ -118,8 +127,8 @@
  function hand(name){return controllers.find(c=>c.userData.hand===name)||controllers[name==='left'?0:1];}
  function setVRPlay(m){
   const P=api.player?.();vrPlay=m;menu.visible=m==='look';seatOff=null;
-  if(m.startsWith('drive')){if(P?.onFoot())P.enterVehicle(true);if(window.GOASurvival?.noVehicle?.()){vrPlay='walk';message('Survival: the truck will not start. Walking instead.');return setVRPlay('walk');}chaseYaw=api.S.yaw;api.S.ctrl=true;message(m==='drive-seat'?'Driver seat. Right stick click recentres your view.':'Chase view. B shows the menu.');}
-  else if(m==='walk'){if(!P?.onFoot()){api.S.vx=api.S.vz=0;api.S.air=false;P?.exitVehicle();}rigYaw=P?.state.camYaw??api.S.yaw;message('On foot. Left stick walks, right stick turns, right trigger fires, A interacts.');}
+  if(m.startsWith('drive')){if(P?.onFoot())P.enterVehicle(true);if(window.GOASurvival?.noVehicle?.()){vrPlay='walk';message('Survival: the truck will not start. Walking instead.');return setVRPlay('walk');}chaseYaw=api.S.yaw;api.S.ctrl=true;message((m==='drive-seat'?'Driver seat. Right stick click recentres your view. ':'Chase view. ')+'Right trigger gas, left trigger brake, either stick steers. Y steps out, B shows the menu.');}
+  else if(m==='walk'){if(!P?.onFoot()){api.S.vx=api.S.vz=0;api.S.air=false;P?.exitVehicle();}rigYaw=P?.state.camYaw??api.S.yaw;message('On foot. Left stick walks (click it to sprint), right stick turns, right trigger fires, A interacts or gets in the truck, B opens the menu.');}
   else positionRig();
   updateHandItem(true);
  }
@@ -129,7 +138,9 @@
   if(edge('menuR',inp.right.b))menu.visible=!menu.visible;
   const headH=floorSpace?1.35:0;
   if(vrPlay.startsWith('drive')){
-   driveIn=menu.visible?{throttle:0,brake:.5,steer:0,handbrake:0,nitro:0}:{throttle:inp.right.trig,brake:inp.left.trig,steer:clamp(inp.left.x,-1,1),handbrake:inp.right.grip>.55?1:0,nitro:inp.right.a?1:0};
+   const st=Math.abs(inp.left.x)>=Math.abs(inp.right.x)?inp.left.x:inp.right.x;
+   driveIn=menu.visible?{throttle:0,brake:.5,steer:0,handbrake:0,nitro:0}:{throttle:Math.max(inp.right.trig,-Math.min(0,inp.right.y)),brake:Math.max(inp.left.trig,Math.max(0,inp.right.y)),steer:clamp(st,-1,1),handbrake:inp.right.grip>.55?1:0,nitro:inp.right.a?1:0};
+   if(edge('outY',inp.left.b)&&!menu.visible){if(Math.hypot(S.vx,S.vz)>1.5)message('Stop the vehicle to step out.');else return setVRPlay('walk');}
    api.physicsStep(dt);driveIn=null;
    if(edge('resetX',inp.left.a))api.resetCar?.();
    if(vrPlay==='drive-chase'){
@@ -144,12 +155,17 @@
     rig.position.set(S.x+rx*side+fx*fwd-ox,S.y+1.3-headH,S.z+rz*side+fz*fwd-oz);
    }
   }else if(vrPlay==='walk'&&P){
-   if(Math.abs(inp.right.x)>.65&&!prevBtn.snap){rigYaw-=Math.sign(inp.right.x)*Math.PI/6;prevBtn.snap=true;}else if(Math.abs(inp.right.x)<.25)prevBtn.snap=false;
+   if(!P.onFoot()){setVRPlay('drive-seat');return;} // A on the "Drive" prompt put you in the truck
+   turnRate=0;
+   if(comfort.smooth){if(Math.abs(inp.right.x)>.2){turnRate=inp.right.x*2.2;rigYaw-=turnRate*dt;}}
+   else if(Math.abs(inp.right.x)>.65&&!prevBtn.snap){rigYaw-=Math.sign(inp.right.x)*Math.PI/6;prevBtn.snap=true;}else if(Math.abs(inp.right.x)<.25)prevBtn.snap=false;
+   if(edge('sprint',inp.left.stick))prevBtn.sprintOn=!prevBtn.sprintOn;if(Math.hypot(inp.left.x,inp.left.y)<.2)prevBtn.sprintOn=false;
    const rc=hand('right'),o=new T.Vector3(),d=new T.Vector3(0,0,-1);rc.updateWorldMatrix(true,false);o.setFromMatrixPosition(rc.matrixWorld);d.applyMatrix4(new T.Matrix4().extractRotation(rc.matrixWorld));
-   P.updateXR(dt,{mx:inp.left.x,mz:-inp.left.y,yaw:headYaw(),fire:!menu.visible&&edge('fire',inp.right.trig>.6),fireHeld:inp.right.trig>.5,interact:edge('interact',inp.right.a),reload:edge('reload',inp.left.a),cycle:edge('cycle',inp.left.b),rayO:o,rayD:d});
+   P.updateXR(dt,{mx:inp.left.x,mz:-inp.left.y,run:!!prevBtn.sprintOn,yaw:headYaw(),fire:!menu.visible&&edge('fire',inp.right.trig>.6),fireHeld:inp.right.trig>.5,interact:edge('interact',inp.right.a),reload:edge('reload',inp.left.a),cycle:edge('cycle',inp.left.b),rayO:o,rayD:d});
    const ps=P.position();rig.position.set(ps.x,ps.y+(floorSpace?0:1.6),ps.z);rig.rotation.y=rigYaw;
    updateHandItem(false);
   }
+  if(vignette){const sp=vrPlay==='walk'&&P?Math.min(1,P.state.speed/3)+Math.min(1,Math.abs(turnRate)/2):vrPlay==='drive-seat'?Math.min(1,Math.abs(S.w||0)*.8):0;const target=comfort.vignette?Math.min(.85,sp*.8):0;vignette.material.opacity+=(target-vignette.material.opacity)*Math.min(1,dt*6);vignette.visible=vignette.material.opacity>.02;}
   api.tickVR(dt,time);
   wristT-=dt;if(wristT<=0){wristT=.25;drawWrist();}
  }
@@ -169,7 +185,7 @@
  function drawWrist(){
   if(!wrist)return;const c=wrist.userData.canvas,g=c.getContext('2d'),P=api.player?.();g.clearRect(0,0,512,256);
   g.fillStyle='rgba(24,34,26,.85)';g.fillRect(0,0,512,256);g.fillStyle='#f0eddf';g.font='bold 34px sans-serif';
-  if(vrPlay.startsWith('drive')){g.fillText(`${Math.round(Math.hypot(api.S.vx,api.S.vz)*3.6)} km/h`,24,64);g.font='26px sans-serif';g.fillText('RT gas · LT brake · stick steer',24,120);g.fillText('Grip handbrake · A nitro · X reset',24,160);g.fillText('B menu',24,200);}
+  if(vrPlay.startsWith('drive')){g.fillText(`${Math.round(Math.hypot(api.S.vx,api.S.vz)*3.6)} km/h`,24,64);g.font='26px sans-serif';g.fillText('RT gas · LT brake · either stick steers',24,120);g.fillText('Grip handbrake · A nitro · X reset',24,160);g.fillText('Y step out · B menu',24,200);}
   else if(P){const id=P.current(),st=window.GOAWeapons?.STATS[id];g.fillText(st?(window.GOAExtension?.weaponName?.(id)||id):id==='rod'?'Fishing rod':'Hunting knife',24,56);
    g.font='28px sans-serif';g.fillText(st?`${P.inv.mags[id]||0}/${st.mag}  ·  ${P.inv.ammo[st.family]} spare`:id==='rod'?(window.GOAFishing?.status?.()||''):'',24,100);
    g.fillStyle='#e0644a';g.fillRect(24,122,P.state.health*4.4,14);
@@ -237,5 +253,5 @@
    m.pose(dt,time);
   });
  }
- window.GOAXR={init,frame,driveInput(){return driveIn;},huntState(){return hunt;},vrPlay(){return vrPlay;},active(){return mode!=='none';},previewActive(){return mode==='preview';},isOpen(){return !!$('xr-panel')?.classList.contains('open');},open:panel,close(){panel(false);},end,worldPosition(){if(mode==='vr')return api.camera.getWorldPosition(new T.Vector3());return null;},state(){return {mode,pending,supported:{...supported},placed,hitReady};}};
+ window.GOAXR={init,frame,setPlay(m){if(mode==='vr')setVRPlay(m);},comfort(){return {...comfort};},driveInput(){return driveIn;},huntState(){return hunt;},vrPlay(){return vrPlay;},active(){return mode!=='none';},previewActive(){return mode==='preview';},isOpen(){return !!$('xr-panel')?.classList.contains('open');},open:panel,close(){panel(false);},end,worldPosition(){if(mode==='vr')return api.camera.getWorldPosition(new T.Vector3());return null;},state(){return {mode,pending,supported:{...supported},placed,hitReady};}};
 })();

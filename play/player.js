@@ -101,7 +101,7 @@ function exitVehicle() {
   S.vx = S.vz = 0;
   Object.assign(P, { on: true, x, z, y: api.groundY(x, z), yaw: S.yaw, camYaw: S.yaw, camPitch: -0.08, speed: 0, aim: 0 });
   if (!person) spawnPerson(); person.mesh.visible = true; equip();
-  document.body.classList.add('on-foot'); hud(); api.toast(`On foot as ${person.avatar.name} · F or D-pad Left to drive`, 2.4);
+  document.body.classList.add('on-foot'); hud(); api.toast(`On foot as ${person.avatar.name} · ${window.GOAController?.hint?.('drive') || 'F to drive'}`, 2.4);
   return true;
 }
 function enterVehicle(force) {
@@ -118,6 +118,7 @@ function enterVehicle(force) {
 // ------------------------------------------------------------------ input
 const k = { f: 0, b: 0, l: 0, r: 0, run: 0, aim: 0, fire: 0, turnL: 0, turnR: 0 };
 let fireHeld = false, firePressed = false, aimHeld = false, padPrev = {};
+const tin = { mx: 0, mz: 0, run: 0, aim: false, fire: false }; // on-screen stick and buttons (phones and tablets)
 function inputBlocked() { return !!(api.panelsOpen?.() || window.GOAXR?.active?.()); }
 addEventListener('keydown', (e) => {
   if (e.target.closest?.('input,select,textarea')) return;
@@ -159,6 +160,15 @@ function bindMouse() {
 }
 function cycle(dir) { const n = slots().length; P.slot = ((P.slot + dir) % n + n) % n; P.reloadT = 0; equip(); }
 /** Gamepad while on foot (called by the controller module with its sampled state). */
+/** On-screen controls (touch-controls.js): stick in -1..1, look in pixels, buttons as presses. */
+const touchApi = {
+  move(x, y, run) { tin.mx = x; tin.mz = y; tin.run = run ? 1 : 0; },
+  look(dx, dy) { if (!P.on) return; const s = 0.0055 * (P.scoped ? 0.3 : P.aim > 0.5 ? 0.6 : 1); P.camYaw -= dx * s; P.camPitch = clamp(P.camPitch - dy * s, -1.2, 0.9); },
+  aim(on) { tin.aim = on === undefined ? !tin.aim : !!on; return tin.aim; },
+  fire(down) { if (down && !tin.fire) firePressed = true; tin.fire = !!down; },
+  interact() { interact(); }, reload() { reload(); }, cycle(d = 1) { cycle(d); },
+  reset() { tin.mx = tin.mz = tin.run = 0; tin.fire = false; },
+};
 function pad(state, gp) {
   if (!gp) return;
   const ax = (i) => { const v = gp.axes?.[i] || 0; return Math.abs(v) < 0.18 ? 0 : v; };
@@ -167,6 +177,8 @@ function pad(state, gp) {
   if (fire && !padPrev.fire) firePressed = true; padPrev.fire = fire; fireHeld = fire || fireHeld && document.pointerLockElement;
   padPrev.run = !!gp.buttons[10]?.pressed || padPrev.run && Math.hypot(ax(0), ax(1)) > 0.3;
   if (state.pressed[0]) interact(); if (state.pressed[2]) reload();
+  if (state.pressed[1]) melee(current() === 'hatchet' ? 'hatchet' : 'knife'); // B / ○: quick swing with whatever blade you carry
+  if (state.pressed[12]) window.GOACampLife?.open?.(); // D-pad up: Adventure panel
   if (state.pressed[3] || state.pressed[14]) enterVehicle();
   if (state.pressed[4]) cycle(-1); if (state.pressed[5]) cycle(1);
 }
@@ -210,7 +222,7 @@ function fire(rayO, rayD) {
   if (id === 'knife' || id === 'hatchet') { melee(id); return; }
   const st = wStats(id); if (!st || P.reloadT > 0 || P.fireT > 0) return;
   if ((inv.mags[id] || 0) <= 0) { sound('click'); if (inv.ammo[st.family] > 0) reload(); else api.toast('Out of ammunition'); return; }
-  inv.mags[id]--; P.mag = inv.mags[id]; P.fireT = st.fire; P.kick = 1; person?.kick();
+  inv.mags[id]--; P.mag = inv.mags[id]; P.fireT = st.fire; P.kick = 1; person?.kick(); window.GOAController?.rumble?.(st.family === 'shotgun' ? 0.9 : 0.6, 120);
   sound(st.sound === 'pistol' ? 'pistol' : st.family);
   const cam = api.camera, o = new T.Vector3(), d = new T.Vector3();
   if (rayO) { o.copy(rayO); d.copy(rayD).normalize(); } else { cam.getWorldPosition(o); cam.getWorldDirection(d); }
@@ -255,7 +267,7 @@ function muzzleFlash() {
 }
 function hurt(dmg, from) {
   if (!P.on) return;
-  P.health = Math.max(0, P.health - dmg); P.hurtT = 0.6; P.camYaw += (Math.random() - 0.5) * 0.15;
+  P.health = Math.max(0, P.health - dmg); P.hurtT = 0.6; P.camYaw += (Math.random() - 0.5) * 0.15; window.GOAController?.rumble?.(1, 260);
   api.toast(`The ${from?.spec?.name?.toLowerCase() || 'animal'} attacks! −${dmg} health · shoot or use your knife (left click)`, 1.8);
   if (P.health <= 0) window.GOASurvival?.onDeath?.(from) || (P.health = 30);
   hud();
@@ -280,7 +292,10 @@ function hud() {
   const name = st ? (window.GOAExtension?.weaponName?.(id) || id) : TOOL_INFO[id]?.name || id;
   el['fh-wname'].textContent = name;
   el['fh-ammo'].textContent = st ? `${inv.mags[id] || 0} / ${st.mag}  ·  ${inv.ammo[st.family]} spare` : id === 'rod' ? (window.GOAFishing?.status?.() || '') : '';
-  el['fh-tip'].textContent = st ? 'Right mouse aim · Left click fire · R reload · Tab switch' : id === 'rod' ? 'Face water · Left click cast, click on the bite, hold to reel' : id === 'hatchet' ? 'Left click: chop deadfall for firewood, tag a harvest or fend off an attack · Tab switch' : 'Left click: tag a harvest or fend off an attack · Tab switch';
+  const L = (k2) => window.GOAController?.label?.(k2) || '', src = window.GOAController?.source?.() || 'kb';
+  el['fh-tip'].textContent = src === 'kb'
+    ? (st ? 'Right mouse aim · Left click fire · R reload · Tab switch' : id === 'rod' ? 'Face water · Left click cast, click on the bite, hold to reel' : id === 'hatchet' ? 'Left click: chop deadfall for firewood, tag a harvest or fend off an attack · Tab switch' : 'Left click: tag a harvest or fend off an attack · Tab switch')
+    : (st ? `${L('aim')} aim · ${L('fire')} fire · ${L('reload')} reload · ${L('switch')} switch · ${L('melee')} knife` : id === 'rod' ? `Face water · ${L('fire')} cast, ${L('fire')} on the bite, hold to reel` : `${L('fire')} ${id === 'hatchet' ? 'chop or swing' : 'swing'} · ${L('switch')} switch`);
   el['fh-hp'].style.width = P.health + '%'; el['fh-st'].style.width = P.stamina * 100 + '%';
 }
 
@@ -288,15 +303,15 @@ function hud() {
 function update(dt) {
   if (!P.on) return;
   const S = api.S, blocked = inputBlocked();
-  const mx = blocked ? 0 : (k.r - k.l) + (padPrev.move?.[0] || 0), mz = blocked ? 0 : (k.f - k.b) - (padPrev.move?.[1] || 0);
+  const mx = blocked ? 0 : (k.r - k.l) + (padPrev.move?.[0] || 0) + tin.mx, mz = blocked ? 0 : (k.f - k.b) - (padPrev.move?.[1] || 0) + tin.mz;
   P.camYaw += ((k.turnL - k.turnR) * 1.9 - (padPrev.look?.[0] || 0) * 2.6 * (P.scoped ? 0.35 : 1)) * dt;
   P.camPitch = clamp(P.camPitch - (padPrev.look?.[1] || 0) * 1.8 * dt * (P.scoped ? 0.35 : 1), -1.2, 0.9);
-  const aiming = !blocked && (k.aim || aimHeld || padPrev.aim) && !!window.GOAWeapons.STATS[current()];
+  const aiming = !blocked && (k.aim || aimHeld || padPrev.aim || tin.aim) && !!window.GOAWeapons.STATS[current()];
   P.aim = damp(P.aim, aiming ? 1 : 0, 14, dt);
   const st = window.GOAWeapons.STATS[current()];
   P.scoped = aiming && P.aim > 0.8 && st && st.zoom > 2;
   const len = Math.min(1, Math.hypot(mx, mz));
-  const sprint = (k.run || padPrev.run) && !aiming && len > 0.2 && P.stamina > 0.05;
+  const sprint = (k.run || padPrev.run || tin.run) && !aiming && len > 0.2 && P.stamina > 0.05;
   const maxSp = aiming ? 1.3 : sprint ? 5.6 : 2.4;
   P.stamina = clamp(P.stamina + (sprint ? -0.16 : 0.1 * (P.wellFed > 0 ? 1.6 : 1)) * dt, 0, 1);
   P.wellFed = Math.max(0, P.wellFed - dt);
@@ -318,7 +333,7 @@ function update(dt) {
   P.fireT = Math.max(0, P.fireT - dt); P.kick = Math.max(0, P.kick - dt * 5); P.hurtT = Math.max(0, P.hurtT - dt); P.swingT = Math.max(0, P.swingT - dt);
   if (P.reloadT > 0) { P.reloadT -= dt; if (P.reloadT <= 0) { const id = current(), s2 = window.GOAWeapons.STATS[id]; if (s2) { const need = s2.mag - (inv.mags[id] || 0), take = Math.min(need, inv.ammo[s2.family]); inv.ammo[s2.family] -= take; inv.mags[id] = (inv.mags[id] || 0) + take; P.mag = inv.mags[id]; sound('reload'); } hud(); } }
   if (firePressed && !blocked) { firePressed = false; fire(); hud(); } else firePressed = false;
-  if (current() === 'rod') window.GOAFishing?.hold?.(fireHeld && !blocked, dt);
+  if (current() === 'rod') window.GOAFishing?.hold?.((fireHeld || tin.fire) && !blocked, dt);
   // avatar
   person.mesh.position.set(P.x, P.y, P.z); person.mesh.rotation.y = P.yaw;
   person.pose({ speed: P.speed, mode: aiming ? 'aim' : (st || current() === 'rod') ? 'ready' : 'idle', pitch: aiming ? P.camPitch : 0 }, dt);
@@ -346,7 +361,7 @@ function update(dt) {
   if (hitT > 0) { hitT -= dt; el['fh-hit'].style.opacity = Math.max(0, hitT / 0.35); }
   el['fh-hurt'].style.opacity = P.hurtT;
   focus = findFocus();
-  el['fh-prompt'].textContent = focus ? `E / A  ·  ${typeof focus.label === 'function' ? focus.label() : focus.label}` : '';
+  el['fh-prompt'].textContent = focus ? `${window.GOAController?.label?.('interact') || 'E'}  ·  ${typeof focus.label === 'function' ? focus.label() : focus.label}` : '';
   el['fh-prompt'].style.display = focus && !aiming && !(focus.global && P.speed > 1.2) ? 'block' : 'none';
   hudT -= dt; if (hudT <= 0) { hudT = 0.25; hud(); }
 }
@@ -356,13 +371,13 @@ function updateXR(dt, input) {
   if (!P.on) return;
   P.camYaw = input.yaw; P.yaw = input.yaw;
   const fx = Math.sin(input.yaw), fz = Math.cos(input.yaw), rx = -Math.cos(input.yaw), rz = Math.sin(input.yaw);
-  const sp = 2.6 * (window.GOASurvival?.speedFactor?.() ?? 1);
+  const sp = (input.run && P.stamina > 0.05 ? 4.6 : 2.6) * (window.GOASurvival?.speedFactor?.() ?? 1);
   let wx = fx * input.mz + rx * input.mx, wz = fz * input.mz + rz * input.mx; const wl = Math.hypot(wx, wz); if (wl > 1) { wx /= wl; wz /= wl; }
   P.vx = damp(P.vx, wx * sp, 8, dt); P.vz = damp(P.vz, wz * sp, 8, dt);
   const nx = P.x + P.vx * dt, nz = P.z + P.vz * dt, gyN = api.groundY(nx, nz), gy = api.groundY(P.x, P.z);
   if (!(gyN < api.WATER - 0.35 || (gyN - gy) / Math.max(Math.hypot(nx - P.x, nz - P.z), 1e-3) > 1.6)) { P.x = nx; P.z = nz; }
   P.speed = Math.hypot(P.vx, P.vz); P.y = damp(P.y, Math.max(api.groundY(P.x, P.z), api.WATER - 0.5), 14, dt);
-  P.fireT = Math.max(0, P.fireT - dt); P.stamina = Math.min(1, P.stamina + dt * 0.1);
+  P.fireT = Math.max(0, P.fireT - dt); P.stamina = clamp(P.stamina + (input.run && P.speed > 1 ? -0.12 : 0.1) * dt, 0, 1);
   if (P.reloadT > 0) { P.reloadT -= dt; if (P.reloadT <= 0) { const id = current(), s2 = window.GOAWeapons.STATS[id]; if (s2) { const take = Math.min(s2.mag - (inv.mags[id] || 0), inv.ammo[s2.family]); inv.ammo[s2.family] -= take; inv.mags[id] = (inv.mags[id] || 0) + take; } } }
   if (input.fire) fire(input.rayO, input.rayD);
   if (current() === 'rod') window.GOAFishing?.hold?.(!!input.fireHeld, dt);
@@ -388,7 +403,7 @@ function setLoadout(weaponId, ammoId) {
 function setAvatar(id) { avatarId = id; try { localStorage.setItem(AVATAR_KEY, id); } catch (e) { /* no storage */ } spawnPerson(); if (person) person.mesh.visible = P.on; }
 
 window.GOAPlayer = {
-  init, update, updateXR, pad, fire, focusLabel: () => focus ? (typeof focus.label === 'function' ? focus.label() : focus.label) : '', exitVehicle, enterVehicle, hurt, addInteractable, setLoadout, setAvatar, equip, hud, sound, cycle,
+  init, update, updateXR, pad, touch: touchApi, fire, focusLabel: () => focus ? (typeof focus.label === 'function' ? focus.label() : focus.label) : '', exitVehicle, enterVehicle, hurt, addInteractable, setLoadout, setAvatar, equip, hud, sound, cycle,
   onFoot: () => P.on, position: () => ({ x: P.x, y: P.y, z: P.z, speed: P.speed, yaw: P.yaw }), state: P, inv, TOOL_INFO,
   avatar: () => avatarId, current, teleport(x, z, yaw) { P.x = x; P.z = z; P.y = api.groundY(x, z); if (yaw !== undefined) { P.yaw = P.camYaw = yaw; } },
   feed(seconds) { P.wellFed = Math.max(P.wellFed, seconds); P.stamina = 1; }, heal(n) { P.health = Math.min(100, P.health + n); hud(); },
