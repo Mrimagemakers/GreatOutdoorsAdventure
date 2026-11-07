@@ -73,7 +73,7 @@ function onDeploy(group) {
   camp = group;
   group.updateMatrixWorld(true);
   const center = worldOf(group);
-  const fx = center.x + Math.sin(group.rotation.y + 0.4) * 2.2, fz = center.z + Math.cos(group.rotation.y + 0.4) * 2.2;
+  const fx = center.x + Math.sin(group.rotation.y + 0.5) * 4.2, fz = center.z + Math.cos(group.rotation.y + 0.5) * 4.2; // clear of the gear
   camp.userData.fire = makeFire(fx, fz);
   const tent = group.getObjectByName('tent'), box = group.getObjectByName('container') || group.getObjectByName('pack');
   camp.userData.tentPos = tent ? worldOf(tent) : null; camp.userData.boxPos = box ? worldOf(box) : new T.Vector3(center.x, 0, center.z);
@@ -136,7 +136,7 @@ function talk(n) {
 // ------------------------------------------------------------------ interactables
 function registerInteractables() {
   const P = window.GOAPlayer;
-  P.addInteractable({ radius: 2.8, pos: () => nearestFirePos(), enabled: () => !!nearestFirePos(),
+  P.addInteractable({ radius: 2.8, pos: () => nearestFirePos(), enabled: () => !!nearestFirePos(), bias: () => hasCookable() || hasCooked() ? 2 : 0,
     label: () => hasCookable() ? 'Cook at the fire' : hasCooked() ? 'Eat a meal' : window.GOASurvival?.active?.() ? 'Warm up by the fire' : 'Cook camp chili',
     action: () => { if (hasCookable()) cook(); else if (!eat()) { if (window.GOASurvival?.active?.()) window.GOASurvival.warm(); else cook(); } } });
   P.addInteractable({ radius: 2.6, pos: () => camp?.userData.tentPos || far, enabled: () => !!camp?.userData.tentPos, label: () => 'Rest in the tent', action: rest });
@@ -221,5 +221,5 @@ function isOpen() { return !!panel?.classList.contains('open'); }
 function frame(dt, t) { updateFires(dt, t); updateNpcs(dt); }
 function init(hooks) { api = hooks; T = window.THREE; buildPanel(); registerInteractables(); }
 
-window.GOACampLife = { init, frame, onDeploy, onPack, makeFire, removeFire, nearFire, fires, cook, eat, open, isOpen, close() { open(false); }, campfire: () => camp?.userData.fire || null };
+window.GOACampLife = { npcCount: () => npcs.length, init, frame, onDeploy, onPack, makeFire, removeFire, nearFire, fires, cook, eat, open, isOpen, close() { open(false); }, campfire: () => camp?.userData.fire || null };
 })();

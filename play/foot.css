@@ -48,7 +48,7 @@ body.aiming #fh-cross{opacity:.95;transform:scale(.6)}
 #surv-compass{display:none;position:fixed;left:50%;top:14px;transform:translateX(-50%);width:min(520px,80vw);height:40px;z-index:31;pointer-events:none;font-family:Barlow,system-ui,sans-serif}
 body.on-foot #surv-compass.on{display:block}
 #sc-strip{position:absolute;inset:0;background:rgba(24,34,26,.72);border-radius:20px;overflow:hidden;color:#f0eddf}
-#sc-strip span{position:absolute;top:50%;transform:translate(-50%,-50%);font-size:12px;opacity:.65}#sc-strip span.card{font-weight:700;font-size:15px;opacity:1}
+#sc-strip span{position:absolute;top:50%;transform:translate(-50%,-50%);font-size:12px;opacity:.65}#sc-strip span.cd{font-weight:700;font-size:15px;opacity:1}
 #sc-strip span.mark{color:#ef8a3d;font-size:16px;opacity:1}#sc-strip span.camp{color:#ffd28a;font-size:17px;opacity:1}
 #sc-needle{position:absolute;left:50%;top:-4px;width:2px;height:48px;background:#e2a23a}
 #sc-info{position:absolute;top:44px;left:0;right:0;text-align:center;color:#fff;font-size:12px;text-shadow:0 1px 3px #000}

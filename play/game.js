@@ -1753,7 +1753,7 @@ const TABS = {
     { k: 'season', label: 'Season', type: 'choice', options: SEASONS.map((x) => [x, SEASON_NAME[x]]), hint: 'Keys 1 to 3. Snow roads are packed and slippery. Changes settle in over a few seconds.' },
     { k: 'weather', label: 'Weather', type: 'choice', options: WEATHERS.map((x) => [x, WEATHER_NAME[x]]), hint: 'Keys 4 to 8. Rain wets the road and fills the ruts.' },
     { k: 'weatherAmt', label: 'Weather intensity', type: 'range', min: 0, max: 1.5, step: 0.05, fmt: pct, hint: 'How much rain or snow falls, and how thick the fog gets.' },
-    { k: 'tod', label: 'Time of day', type: 'choice', options: [['season', 'Afternoon'], ['morning', 'Morning'], ['midday', 'Midday'], ['golden', 'Golden hour']] },
+    { k: 'tod', label: 'Time of day', type: 'choice', options: [['season', 'Afternoon'], ['morning', 'Morning'], ['midday', 'Midday'], ['golden', 'Golden hour'], ['night', 'Night']] },
   ] },
   screen: { label: 'Sound', rows: [
     { k: 'sound', label: 'Sound', type: 'toggle' },
@@ -2598,7 +2598,15 @@ function updateEnv(dt, time) {
   sun.position.set(cx + sunDir.x * 250, S.y + sunDir.y * 250, cz + sunDir.z * 250); sun.target.position.set(cx, S.y, cz);
   hemi.color.copy(live.hemiS).lerp(W.grey, W.over * 0.5); hemi.groundColor.copy(live.hemiG); hemi.intensity = 0.62 + W.over * 0.65;
   scene.environmentIntensity = 0.48 + W.over * 0.35;
-  renderer.toneMappingExposure = (1.0 + W.over * 0.18 + (P.tod === 'golden' ? 0.1 : 0)) * P.brightness;
+  // Survival nights: darken the sky, ambient and fog together (sunlight alone is not enough)
+  live.night = lerp(live.night || 0, P.tod === 'night' ? 1 : 0, k);
+  if (live.night > 0.001) {
+    const nk = live.night;
+    hemi.intensity *= 1 - 0.88 * nk; scene.environmentIntensity *= 1 - 0.9 * nk; sun.intensity *= 1 - 0.5 * nk;
+    su.top.value.lerp(TOD.night.top, nk); su.hor.value.lerp(TOD.night.hor, nk * 0.9); su.sunVis.value *= 1 - nk * 0.9;
+    scene.fog.color.lerp(TOD.night.hor, nk * 0.9); hemi.color.lerp(TOD.night.hor, nk * 0.5);
+  }
+  renderer.toneMappingExposure = (1.0 + W.over * 0.18 + (P.tod === 'golden' ? 0.1 : 0)) * P.brightness * (1 - 0.42 * (live.night || 0));
   TREE_TINT.value.set(lerp(1, 1.08, sw.dust), lerp(1, 1.0, sw.dust), lerp(1, 0.86, sw.dust)).multiplyScalar(1 - W.wet * 0.15);
   GRASS_TINT.value.set(lerp(0.46, 1.08, sw.dust), lerp(0.86, 0.98, sw.dust), lerp(0.32, 0.78, sw.dust)).multiplyScalar(lerp(1, 0.92, sw.snow) * (1 - W.wet * 0.15));
   GRASS_HIDE.value = smooth(0.15, 0.8, SV.snow) * 0.985;

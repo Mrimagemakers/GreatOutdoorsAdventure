@@ -2,14 +2,17 @@
 
 Open the game over HTTPS (the published site) or localhost. Choose **VR / AR** from the game toolbar or pause menu.
 
-## VR lookout
+## VR: drive, walk and hunt
 
-Connect a headset and use a browser that supports immersive WebXR VR. Choose **Enter VR** and allow the browser's session request.
+Connect a headset and use a browser that supports immersive WebXR VR. Choose **Enter VR**. Point a controller at the floating menu and pull the trigger to choose a mode; **B / Y** shows or hides the menu.
 
-- Head tracking lets you look around the full-size landscape beside the parked vehicle.
-- Point a tracked controller at the floating menu and press its trigger to select River Valley, Snowy Mountain, a snap turn, or Exit VR.
-- The controller's horizontal stick snaps the view by 30 degrees. A controller grip/squeeze also exits. Your device's system exit control remains available.
-- Driving and lap timing are paused. This is a stationary viewing mode; it does not add immersive driving, hunting or on-foot locomotion.
+- **Drive · chase view** follows behind the vehicle. **Drive · driver seat** puts you in the cab; click the right stick to recentre. Right trigger gas, left trigger brake, left stick steer, right grip handbrake, A nitro, X reset to the road. A wrist display on the left controller shows speed and controls.
+- **Walk & hunt on foot**: left stick walks where you look, right stick snap-turns 30°, right trigger fires (or casts and reels with the rod), A interacts (tag, cook, open caches, fill canteen…), X reloads, Y switches weapon / rod / knife. Your weapon is held in your right hand; the wrist display shows ammunition, health, Survival needs and the current prompt.
+- **Lookout (paused)** is the original stationary viewpoint; River Valley and Snowy Mountain jump there.
+
+## Hunt in augmented reality
+
+Choose **Hunt in AR** on a phone or headset that supports immersive AR. Move slowly until the gold ring appears on the floor and tap (or pull the trigger) to release a deer, elk, fox, hare, coyote and bear around that spot. Tap the screen to fire at the crosshair (headsets fire along the controller). Animals wander, notice you when you get close, scatter at a shot and lie down when harvested, and new ones replace them. **Smaller / Larger / Life size** change their scale. Uses your outfitter weapon. Squeeze or Exit to finish.
 
 ## AR tabletop
 
@@ -28,4 +31,4 @@ Choose **Preview tabletop** even if VR and AR are unavailable. Drag to rotate, o
 
 VR and AR entry buttons are enabled only after the browser reports support for the corresponding session type. Secure contexts, device capabilities, browser implementation and permissions determine availability. This is WebXR support, not a native console or app-store build.
 
-Browser checks covered support detection, unavailable-device messaging, tabletop rendering, rotation/size controls, and returning to the game. Immersive headset tracking, tracked-controller rays, camera passthrough and real-surface placement require testing on physical XR hardware and have not been hardware-certified.
+Browser checks covered support detection, unavailable-device messaging, tabletop rendering, rotation/size controls, and returning to the game. VR driving, VR walking and firing, and AR hunting (placement, spawning and controller shots) were exercised in the Immersive Web Emulation Runtime with an emulated Meta Quest 3. Physical headset comfort, real controller feel, phone camera passthrough and real-surface hit testing still need checking on actual hardware.

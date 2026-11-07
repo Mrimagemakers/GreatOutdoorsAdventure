@@ -125,5 +125,5 @@ function journalSection() {
   return s;
 }
 function init(hooks) { api = hooks; T = window.THREE; (window.GOAJournalSections = window.GOAJournalSections || []).push(journalSection); }
-window.GOAFishing = { init, use, hold, rodModel, status, log: () => log, isWater, waterKind, cancel: () => bobber && reelIn(null), session: () => st.session, reset() { st.session = 0; } };
+window.GOAFishing = { init, use, hold, rodModel, status, log: () => log, isWater, waterKind, cancel: () => bobber && reelIn(null), debugBite() { if (st.phase === 'wait' || st.phase === 'cast') { bobber.position.set(st.bx, st.by, st.bz); st.phase = 'bite'; st.t = 1.25; use(); } }, session: () => st.session, reset() { st.session = 0; } };
 })();

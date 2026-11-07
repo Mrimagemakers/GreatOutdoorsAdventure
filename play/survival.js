@@ -210,7 +210,7 @@ function drawCompass() {
   if (has) {
     for (let d = -90; d <= 90; d += 15) {
       const b = Math.round((heading + d + 360) % 360), x = 50 + d / 1.8, lab = { 0: 'N', 45: 'NE', 90: 'E', 135: 'SE', 180: 'S', 225: 'SW', 270: 'W', 315: 'NW' }[(Math.round(b / 15) * 15) % 360];
-      html += `<span style="left:${x}%" class="${lab ? 'card' : ''}">${lab || '·'}</span>`;
+      html += `<span style="left:${x}%" class="${lab ? 'cd' : ''}">${lab || '·'}</span>`;
     }
     const c = nextCache();
     if (c) { const bc = ((Math.PI - Math.atan2(c.x - p.x, c.z - p.z)) * 180 / Math.PI + 360) % 360; let rel = ((bc - heading + 540) % 360) - 180; rel = clamp(rel, -88, 88); html += `<span class="mark" style="left:${50 + rel / 1.8}%">◆</span>`; }

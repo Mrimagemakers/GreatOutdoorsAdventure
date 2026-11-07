@@ -158,8 +158,8 @@ function findFocus() {
   if (down) { best = { label: `Tag harvest · ${down.spec.name}${down.bull ? ' (bull)' : ''}`, action: () => tagAnimal(down) }; bd = 0; }
   for (const it of interactables) {
     if (it.enabled && !it.enabled()) continue;
-    const p = it.global ? null : it.pos(); const d = it.global ? 50 : Math.hypot(p.x - P.x, p.z - P.z); // actions you can do anywhere rank below nearby objects
-    if ((it.global || d < (it.radius || 2.5)) && d < bd) { bd = d; best = it; }
+    const p = it.global ? null : it.pos(); const d0 = it.global ? 50 : Math.hypot(p.x - P.x, p.z - P.z), d = d0 - (it.bias ? it.bias() : 0); // actions you can do anywhere rank below nearby objects
+    if ((it.global || d0 < (it.radius || 2.5)) && d < bd) { bd = d; best = it; }
   }
   const S = api.S, dv = Math.hypot(S.x - P.x, S.z - P.z);
   if (dv < 4.2 && dv < bd && !window.GOASurvival?.noVehicle?.()) best = { label: 'Drive', action: () => enterVehicle() };

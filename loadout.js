@@ -31,7 +31,7 @@ function renderVehicles(filter='All'){
  const grid=document.querySelector('#vehicle-grid');grid.replaceChildren();
  for(const vehicle of vehicles.filter(v=>filter==='All'||v.type===filter)){
   const button=node('button','vehicle-card');button.type='button';button.dataset.vehicle=vehicle.id;
-  const picture=node('img','vehicle-picture');picture.src='play/assets/garage/'+(vehicle.type==='UTV'?'buggy':'truck')+'.webp';picture.alt=vehicle.name+' — prototype visual stand-in';picture.loading='lazy';button.append(picture,node('small',null,'Prototype visual stand-in'));
+  const picture=node('img','vehicle-picture');picture.src='play/assets/garage/catalog/'+vehicle.id+'.webp';picture.onerror=()=>{picture.onerror=null;picture.src='play/assets/garage/'+(vehicle.type==='UTV'?'buggy':'truck')+'.webp';};picture.alt=vehicle.name+' — reference design';picture.loading='lazy';button.append(picture,node('small',null,'Prototype visual stand-in'));
   button.append(node('span','vehicle-category',vehicle.type+' / '+vehicle.role),node('h4',null,vehicle.name),node('p',null,vehicle.features));
   const stats=node('div','vehicle-stats');
   stats.append(node('span',null,vehicle.passengers===undefined?'Capacity: TBD':vehicle.passengers+' seats'),node('span',null,vehicle.cargoLbs===undefined?'Cargo: TBD':vehicle.cargoLbs.toLocaleString()+' lb cargo'),node('span',null,vehicle.clearanceIn===undefined?'Clearance: TBD':vehicle.clearanceIn+' in clearance'));

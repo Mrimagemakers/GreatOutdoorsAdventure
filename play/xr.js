@@ -119,7 +119,7 @@
  function setVRPlay(m){
   const P=api.player?.();vrPlay=m;menu.visible=m==='look';seatOff=null;
   if(m.startsWith('drive')){if(P?.onFoot())P.enterVehicle(true);if(window.GOASurvival?.noVehicle?.()){vrPlay='walk';message('Survival: the truck will not start. Walking instead.');return setVRPlay('walk');}chaseYaw=api.S.yaw;api.S.ctrl=true;message(m==='drive-seat'?'Driver seat. Right stick click recentres your view.':'Chase view. B shows the menu.');}
-  else if(m==='walk'){if(!P?.onFoot())P?.exitVehicle();rigYaw=P?.state.camYaw??api.S.yaw;message('On foot. Left stick walks, right stick turns, right trigger fires, A interacts.');}
+  else if(m==='walk'){if(!P?.onFoot()){api.S.vx=api.S.vz=0;api.S.air=false;P?.exitVehicle();}rigYaw=P?.state.camYaw??api.S.yaw;message('On foot. Left stick walks, right stick turns, right trigger fires, A interacts.');}
   else positionRig();
   updateHandItem(true);
  }
@@ -193,7 +193,7 @@
   const kind=HUNT_KINDS[i%HUNT_KINDS.length],k=hunt.k===0?1:hunt.k,R=(hunt.k===0?6:2.4)*Math.max(.6,k/.35);
   const ang=Math.random()*Math.PI*2,r=R*(.4+Math.random()*.6),y=hunt.anchor.y;
   const m=window.GOAWildlife.makeAnimal(kind,{scale:k,ground:()=>y,x:hunt.anchor.x+Math.sin(ang)*r,z:hunt.anchor.z+Math.cos(ang)*r,yaw:Math.random()*6.28});
-  m.R=R;m.animal.t=Math.random()*4;arScene.add(m.animal.mesh);return m;
+  m.R=R;m.animal.t=Math.random()*4;m.animal.hp=m.animal.spec.hp*.6; // quicker hunts in a roomarScene.add(m.animal.mesh);return m;
  }
  function huntScale(f){if(!hunt)return;hunt.k=f===0?(hunt.k===0?.35:0):Math.min(1,Math.max(.12,(hunt.k||.35)*f));if(hunt.anchor){for(const m of hunt.animals)arScene.remove(m.animal.mesh);hunt.animals=HUNT_KINDS.map((_,i)=>huntSpawn(i));}message(hunt.k===0?'Life size. Step back and look around.':`Animals at ${Math.round(hunt.k*100)}% size.`);}
  function huntSelect(event){
@@ -205,7 +205,9 @@
   if(hunt.fireT>0)return;
   const ref=api.renderer.xr.getReferenceSpace(),pose=event.frame?.getPose?.(event.inputSource.targetRaySpace,ref);
   const o=new T.Vector3(),d=new T.Vector3(0,0,-1);
-  if(pose){const m=new T.Matrix4().fromArray(pose.transform.matrix);o.setFromMatrixPosition(m);d.applyMatrix4(new T.Matrix4().extractRotation(m));}
+  const src=event.inputSource,ctl=src?.targetRayMode==='tracked-pointer'?controllers.find(c=>c.userData.hand===src.handedness):null;
+  if(ctl){ctl.updateWorldMatrix(true,false);o.setFromMatrixPosition(ctl.matrixWorld);d.applyMatrix4(new T.Matrix4().extractRotation(ctl.matrixWorld));} // headset controllers: the tracked ray
+  else if(pose){const m=new T.Matrix4().fromArray(pose.transform.matrix);o.setFromMatrixPosition(m);d.applyMatrix4(new T.Matrix4().extractRotation(m));} // phone: through the tap
   else{const cam=api.renderer.xr.getCamera();cam.getWorldPosition(o);cam.getWorldDirection(d);}
   const lo=window.GOAExtension?.getLoadout?.()||{},st=window.GOAWeapons.stats(lo.weaponId||'rifle-wood',lo.ammoId);
   hunt.fireT=Math.min(st.fire,.6);hunt.shots++;api.player?.()?.sound?.(st.family);hunt.flash.position.copy(o);hunt.flash.intensity=6;setTimeout(()=>{if(hunt)hunt.flash.intensity=0;},60);
@@ -235,5 +237,5 @@
    m.pose(dt,time);
   });
  }
- window.GOAXR={init,frame,driveInput(){return driveIn;},vrPlay(){return vrPlay;},active(){return mode!=='none';},previewActive(){return mode==='preview';},isOpen(){return !!$('xr-panel')?.classList.contains('open');},open:panel,close(){panel(false);},end,worldPosition(){if(mode==='vr')return api.camera.getWorldPosition(new T.Vector3());return null;},state(){return {mode,pending,supported:{...supported},placed,hitReady};}};
+ window.GOAXR={init,frame,driveInput(){return driveIn;},huntState(){return hunt;},vrPlay(){return vrPlay;},active(){return mode!=='none';},previewActive(){return mode==='preview';},isOpen(){return !!$('xr-panel')?.classList.contains('open');},open:panel,close(){panel(false);},end,worldPosition(){if(mode==='vr')return api.camera.getWorldPosition(new T.Vector3());return null;},state(){return {mode,pending,supported:{...supported},placed,hitReady};}};
 })();
