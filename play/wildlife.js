@@ -16,7 +16,7 @@ let T = null, api = null;
 // Sizes are metres (shoulder height, body length). Colours: coat, belly, legs, face, accent (rump/tail/chest), dark (hooves, nose).
 const SPECIES = {
   deer: {
-    name: 'White-tailed Deer', latin: 'Odocoileus virginianus',
+    hp: 90, kg: [45, 110], name: 'White-tailed Deer', latin: 'Odocoileus virginianus',
     note: 'Graceful and alert. Flags its white tail and bounds away when startled. Look along meadow edges at dawn and dusk.',
     habitat: 'Meadows, forest edges', shoulder: 0.95, len: 0.95, bodyR: 0.24, bodyW: 0.82, neckLen: 0.45, neckR: 0.09, neckUp: 0.95,
     headLen: 0.3, headR: 0.085, muzzle: 0.13, ears: 'point', earLen: 0.15, tail: 'flag', tailLen: 0.2, legR: 0.035, feet: 'hoof',
@@ -24,7 +24,7 @@ const SPECIES = {
     antlers: 'deer', antlerChance: 0.35, walk: 1.2, run: 11, alert: 70, flee: 38, calm: 120, gait: 'bound', spot: 75,
   },
   elk: {
-    name: 'Rocky Mountain Elk', latin: 'Cervus canadensis',
+    hp: 150, kg: [180, 330], name: 'Rocky Mountain Elk', latin: 'Cervus canadensis',
     note: 'Massive and social, moving in herds. Bulls carry sweeping antlers; listen for their bugle in autumn.',
     habitat: 'High meadows, open slopes', shoulder: 1.45, len: 1.35, bodyR: 0.36, bodyW: 0.86, neckLen: 0.7, neckR: 0.15, neckUp: 0.85,
     headLen: 0.48, headR: 0.12, muzzle: 0.2, ears: 'point', earLen: 0.2, tail: 'stub', tailLen: 0.1, legR: 0.055, feet: 'hoof',
@@ -32,7 +32,7 @@ const SPECIES = {
     neckCol: '#4e3727', antlers: 'elk', antlerChance: 0.4, walk: 1.3, run: 12, alert: 90, flee: 45, calm: 140, gait: 'trot', spot: 110,
   },
   bear: {
-    name: 'American Black Bear', latin: 'Ursus americanus',
+    hp: 170, kg: [80, 200], name: 'American Black Bear', latin: 'Ursus americanus',
     note: 'Curious, powerful and usually shy. Gives wide berth to people. Seen near berries, streams and forest cover.',
     habitat: 'Forest, streams', shoulder: 0.95, len: 1.0, bodyR: 0.4, bodyW: 0.92, neckLen: 0.25, neckR: 0.2, neckUp: 0.15,
     headLen: 0.34, headR: 0.17, muzzle: 0.15, ears: 'round', earLen: 0.09, tail: 'stub', tailLen: 0.06, legR: 0.09, feet: 'paw',
@@ -40,7 +40,7 @@ const SPECIES = {
     walk: 0.9, run: 8.5, alert: 60, flee: 28, calm: 90, gait: 'amble', spot: 90, hump: true,
   },
   fox: {
-    name: 'Red Fox', latin: 'Vulpes vulpes',
+    hp: 30, kg: [4, 8], name: 'Red Fox', latin: 'Vulpes vulpes',
     note: 'Quick and clever. A flash of orange with a white-tipped brush of a tail, hunting voles in the grass.',
     habitat: 'Field edges, brush', shoulder: 0.4, len: 0.42, bodyR: 0.1, bodyW: 0.8, neckLen: 0.14, neckR: 0.06, neckUp: 0.55,
     headLen: 0.16, headR: 0.065, muzzle: 0.11, ears: 'point', earLen: 0.09, tail: 'brush', tailLen: 0.42, legR: 0.018, feet: 'paw',
@@ -48,7 +48,7 @@ const SPECIES = {
     walk: 1.4, run: 12.5, alert: 45, flee: 24, calm: 85, gait: 'bound', spot: 50, tailTip: true,
   },
   rabbit: {
-    name: 'Cottontail & Snowshoe Hare', latin: 'Sylvilagus / Lepus americanus',
+    hp: 18, kg: [1, 2.5], name: 'Cottontail & Snowshoe Hare', latin: 'Sylvilagus / Lepus americanus',
     note: 'Small and watchful. Cottontails freeze, then zig-zag. Snowshoe hares turn white for winter on the high ground.',
     habitat: 'Grass, brush, snow', shoulder: 0.2, len: 0.16, bodyR: 0.09, bodyW: 0.95, neckLen: 0.05, neckR: 0.05, neckUp: 0.5,
     headLen: 0.11, headR: 0.055, muzzle: 0.03, ears: 'long', earLen: 0.12, tail: 'puff', tailLen: 0.05, legR: 0.018, feet: 'paw',
@@ -56,7 +56,7 @@ const SPECIES = {
     walk: 0.8, run: 9, alert: 26, flee: 14, calm: 55, gait: 'hop', spot: 32,
   },
   coyote: {
-    name: 'Coyote', latin: 'Canis latrans',
+    hp: 45, kg: [9, 20], name: 'Coyote', latin: 'Canis latrans',
     note: 'Adaptable and vocal, often in pairs or small packs. Grey-tan coat and a bushy tail held low as it trots.',
     habitat: 'Open country, ridges', shoulder: 0.58, len: 0.6, bodyR: 0.14, bodyW: 0.78, neckLen: 0.2, neckR: 0.08, neckUp: 0.45,
     headLen: 0.21, headR: 0.08, muzzle: 0.14, ears: 'point', earLen: 0.1, tail: 'brush', tailLen: 0.38, legR: 0.026, feet: 'paw',
@@ -245,7 +245,7 @@ function spawn(kind, x, z, home, herd) {
   api.scene.add(mesh);
   const a = {
     kind, spec, mesh, rg, bull, sc, x, z, yaw: rnd() * Math.PI * 2, speed: 0, want: 0, state: 'graze', t: 2 + rnd() * 8,
-    tx: x, tz: z, home, herd, phase: rnd(), chk: rnd() * 0.3, okAhead: true, fdx: 0, fdz: 1, graze: 1, alertK: 0, look: 0, vis: 0, logged: false, winter, key, hopY: 0, pitch: 0, flick: 0,
+    tx: x, tz: z, home, herd, phase: rnd(), chk: rnd() * 0.3, okAhead: true, fdx: 0, fdz: 1, hp: spec.hp * sc, wounded: false, downT: 0, roll: 0, atkT: 0, strikes: 0, graze: 1, alertK: 0, look: 0, vis: 0, logged: false, winter, key, hopY: 0, pitch: 0, flick: 0,
   };
   mesh.position.set(x, api.groundY(x, z), z); mesh.rotation.y = a.yaw;
   animals.push(a);
@@ -286,14 +286,26 @@ function pickTarget(a) {
   a.tx = a.home.x; a.tz = a.home.z; return false;
 }
 
-const carP = { x: 0, z: 0, sp: 0 };
+const carP = { x: 0, z: 0, sp: 0, foot: false };
+let hostile = false, night = false;
 function think(a, dt) {
   const s = a.spec;
+  if (a.state === 'down') { a.speed = 0; return 1e9; }
   const dx = a.x - carP.x, dz = a.z - carP.z, dCar = Math.hypot(dx, dz);
-  const scare = api.S.started ? s.flee + carP.sp * 1.1 : 0;
-  const notice = api.S.started ? s.alert + carP.sp * 1.5 : 0;
-  a.t -= dt; a.chk -= dt;
-  if (dCar < scare && a.state !== 'flee') { a.state = 'flee'; a.t = 0; if (a.herd) { a.herd.x = a.x + dx / dCar * 60; a.herd.z = a.z + dz / dCar * 60; } }
+  // on foot you are quieter: walking lets you close in, running gives you away
+  const footK = carP.foot ? (carP.sp > 3 ? 0.9 : carP.sp > 0.4 ? 0.55 : 0.4) : 1;
+  const scare = api.S.started ? (s.flee + carP.sp * 1.1) * footK : 0;
+  const notice = api.S.started ? (s.alert + carP.sp * 1.5) * footK : 0;
+  a.t -= dt; a.chk -= dt; a.atkT -= dt;
+  // predators turn on you: in Survival, bears and (after dark) coyotes may charge; a wounded bear always might
+  const predator = a.kind === 'bear' || a.kind === 'coyote';
+  if (carP.foot && predator && a.state !== 'charge' && a.state !== 'flee' && a.strikes < 3 && dCar < (a.kind === 'bear' ? 28 : 22)
+      && ((hostile && (a.kind === 'bear' || night)) || (a.kind === 'bear' && a.wounded))) { a.state = 'charge'; a.t = 14; }
+  if (a.state === 'charge') {
+    a.want = s.run * (a.kind === 'bear' ? 0.75 : 0.85); a.tx = carP.x; a.tz = carP.z;
+    if (dCar < (a.kind === 'bear' ? 2.3 : 1.6) && a.atkT <= 0) { a.atkT = a.kind === 'bear' ? 1.7 : 1.1; a.strikes++; window.GOAPlayer?.hurt?.(a.kind === 'bear' ? 22 : 9, a); }
+    if (a.t <= 0 || a.strikes >= 3 || !carP.foot || dCar > 70) { a.state = 'flee'; }
+  } else if (dCar < scare && a.state !== 'flee') { a.state = 'flee'; a.t = 0; if (a.herd) { a.herd.x = a.x + dx / dCar * 60; a.herd.z = a.z + dz / dCar * 60; } }
   switch (a.state) {
     case 'graze':
       a.want = 0;
@@ -311,8 +323,9 @@ function think(a, dt) {
       a.want = 0;
       if (dCar > notice * 1.15 && a.t <= 0) { a.state = 'graze'; a.t = 3 + rnd() * 6; }
       break;
+    case 'charge': break;
     case 'flee': {
-      a.want = s.run;
+      a.want = s.run * (a.wounded ? 0.8 : 1);
       // run away from the vehicle, bending toward open ground and away from water
       let fx = dx / Math.max(dCar, 0.01), fz = dz / Math.max(dCar, 0.01);
       if (a.kind === 'rabbit') { const zig = Math.sin(performance.now() * 0.004 + a.phase * 20) * 0.7; const c = Math.cos(zig), sn = Math.sin(zig); [fx, fz] = [fx * c - fz * sn, fx * sn + fz * c]; }
@@ -327,7 +340,7 @@ function think(a, dt) {
         a.fdx = bestX; a.fdz = bestZ;
       }
       a.tx = a.x + a.fdx * 20; a.tz = a.z + a.fdz * 20;
-      if (dCar > s.calm) { a.state = 'walk'; a.home.x = a.x; a.home.z = a.z; if (a.herd) { a.herd.x = a.x; a.herd.z = a.z; } pickTarget(a); a.t = 20; }
+      if (dCar > s.calm && !a.panic) { a.state = 'walk'; a.home.x = a.x; a.home.z = a.z; if (a.herd) { a.herd.x = a.x; a.herd.z = a.z; } pickTarget(a); a.t = 20; }
       break;
     }
   }
@@ -335,9 +348,10 @@ function think(a, dt) {
   a.speed = damp(a.speed, a.want, a.want > a.speed ? 3.2 : 4.5, dt);
   if (a.speed > 0.05) {
     const goal = Math.atan2(a.tx - a.x, a.tz - a.z);
-    a.yaw += clamp(wrapA(goal - a.yaw), -1, 1) * Math.min(1, dt * (a.state === 'flee' ? 5 : 2.2));
-    if (a.chk <= 0 && a.state !== 'flee') a.okAhead = validSpot(a.x + Math.sin(a.yaw) * 2.5, a.z + Math.cos(a.yaw) * 2.5);
-    if (a.okAhead || a.state === 'flee') { a.x += Math.sin(a.yaw) * a.speed * dt; a.z += Math.cos(a.yaw) * a.speed * dt; }
+    a.yaw += clamp(wrapA(goal - a.yaw), -1, 1) * Math.min(1, dt * (a.state === 'flee' || a.state === 'charge' ? 5 : 2.2));
+    if (a.panic > 0) a.panic = Math.max(0, a.panic - dt);
+    if (a.chk <= 0 && a.state !== 'flee' && a.state !== 'charge') a.okAhead = validSpot(a.x + Math.sin(a.yaw) * 2.5, a.z + Math.cos(a.yaw) * 2.5);
+    if (a.okAhead || a.state === 'flee' || a.state === 'charge') { a.x += Math.sin(a.yaw) * a.speed * dt; a.z += Math.cos(a.yaw) * a.speed * dt; }
     else { pickTarget(a); a.okAhead = true; }
     if (a.state === 'flee' && api.groundY(a.x, a.z) < api.WATER + 0.2) { a.x -= Math.sin(a.yaw) * a.speed * dt; a.z -= Math.cos(a.yaw) * a.speed * dt; a.yaw += 1.2 * dt * 3; }
   } else if (a.state === 'alert') {
@@ -345,12 +359,21 @@ function think(a, dt) {
   }
   // never get run over: a firm shove out of the vehicle's way
   if (a.chk <= 0) a.chk = 0.25 + rnd() * 0.1;
-  if (dCar < 3.2 && api.S.started) { a.x = carP.x + dx / Math.max(dCar, 0.01) * 3.2; a.z = carP.z + dz / Math.max(dCar, 0.01) * 3.2; }
+  if (dCar < 3.2 && api.S.started && !carP.foot) { a.x = carP.x + dx / Math.max(dCar, 0.01) * 3.2; a.z = carP.z + dz / Math.max(dCar, 0.01) * 3.2; }
   return dCar;
 }
 
 function pose(a, dt, time) {
   const { rg, spec } = a, b = rg.bones;
+  const gy = a.ground || api.groundY;
+  if (a.state === 'down') {
+    a.downT += dt; a.roll = Math.min(Math.PI / 2 * 0.92, a.roll + dt * 3.2);
+    for (const n of ['hipFL', 'hipFR', 'hipHL', 'hipHR']) b[n].rotation.x = damp(b[n].rotation.x, n.includes('F') ? -0.5 : 0.5, 4, dt);
+    for (const n of ['kneeFL', 'kneeFR', 'kneeHL', 'kneeHR']) b[n].rotation.x = damp(b[n].rotation.x, 0.3, 4, dt);
+    b.neck.rotation.x = damp(b.neck.rotation.x, 0.25, 3, dt); b.body.position.y = damp(b.body.position.y, rg.R * 0.9, 4, dt);
+    a.mesh.position.set(a.x, gy(a.x, a.z) + 0.02, a.z); a.mesh.rotation.set(0, a.yaw, a.roll, 'YXZ');
+    return;
+  }
   const moving = clamp(a.speed / Math.max(spec.walk, 0.5), 0, 1);
   const running = clamp((a.speed - spec.walk * 1.4) / (spec.run * 0.5), 0, 1);
   const gaitName = running > 0.35 ? spec.gait : (spec.gait === 'hop' ? 'hop' : 'walk');
@@ -375,7 +398,7 @@ function pose(a, dt, time) {
   b.body.position.y = rg.H + bob - drop;
   b.body.rotation.x = rock;
   // head: graze low when still, raised and turned when alert, stretched forward on the run
-  const grazeT = a.state === 'graze' ? 1 : 0, alertT = a.state === 'alert' ? 1 : 0;
+  const grazeT = a.state === 'graze' ? 1 : 0, alertT = a.state === 'alert' || a.state === 'charge' ? 1 : 0;
   a.graze = damp(a.graze, grazeT, 2.2, dt); a.alertK = damp(a.alertK, alertT, 4, dt);
   const nibble = a.graze * Math.max(0, Math.sin(time * 1.7 + a.phase * 9)) * 0.08;
   const down = spec === SPECIES.bear ? 0.55 : spec.neckUp + 0.55;
@@ -392,8 +415,8 @@ function pose(a, dt, time) {
   else if (spec.tail === 'brush') b.tail.rotation.x = -(spec === SPECIES.coyote ? 0.75 : 0.45) + running * 0.35 + Math.sin(time * 2.1 + a.phase * 7) * 0.06;
   else b.tail.rotation.x = Math.sin(time * 4 + a.phase * 11) * 0.12;
   // place on the ground, pitched to the slope
-  const y = api.groundY(a.x, a.z), half = rg.L * 0.5 * a.sc;
-  const yf = api.groundY(a.x + Math.sin(a.yaw) * half, a.z + Math.cos(a.yaw) * half), yb = api.groundY(a.x - Math.sin(a.yaw) * half, a.z - Math.cos(a.yaw) * half);
+  const y = gy(a.x, a.z), half = rg.L * 0.5 * a.sc;
+  const yf = gy(a.x + Math.sin(a.yaw) * half, a.z + Math.cos(a.yaw) * half), yb = gy(a.x - Math.sin(a.yaw) * half, a.z - Math.cos(a.yaw) * half);
   a.pitch = damp(a.pitch, clamp(Math.atan2(yb - yf, half * 2), -0.5, 0.5), 8, dt);
   a.mesh.position.set(a.x, y, a.z); a.mesh.rotation.set(a.pitch, a.yaw, 0, 'YXZ');
 }
@@ -435,11 +458,13 @@ function renderJournal() {
     const latin = document.createElement('p'); latin.className = 'latin'; latin.textContent = s.latin;
     const note = document.createElement('p'); note.textContent = s.note;
     const meta = document.createElement('p'); meta.className = 'meta';
-    meta.textContent = j?.seen ? `Seen ${j.seen}× · closest ${j.closest} m · last near ${j.where}` : `Not yet recorded · habitat: ${s.habitat}`;
+    meta.textContent = j?.seen ? `Seen ${j.seen}× · closest ${j.closest} m · last near ${j.where}${j.harvested ? ` · harvested ${j.harvested} (best ${j.best} kg)` : ''}` : `Not yet recorded · habitat: ${s.habitat}`;
     body.append(h, latin, note, meta);
     if (near[k]) { const hint = document.createElement('p'); hint.className = 'hint'; hint.textContent = `Nearest: about ${near[k]}`; body.append(hint); }
     card.append(sw, body); list.append(card);
   }
+  const extra = panel.querySelector('#journal-extra'); extra.innerHTML = '';
+  for (const section of window.GOAJournalSections || []) { try { const el = section(); if (el) extra.append(el); } catch (e) { console.warn(e); } }
 }
 function nearestOf() {
   const out = {};
@@ -458,7 +483,7 @@ function buildPanel() {
   panel = document.createElement('div'); panel.id = 'journal'; panel.className = 'sheet card'; panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'Field journal');
   panel.innerHTML = '<div class="sethead"><b>FIELD JOURNAL · WILDLIFE</b><button id="journal-close" class="btn">Close</button></div>'
     + '<div class="journal-content"><p>Slow down near meadows, rivers and ridgelines. Keep an animal in view for a moment to log it. Drive gently: animals look up when a vehicle approaches and run if it comes too close.</p>'
-    + '<div id="journal-cards"></div><p class="journal-note">Sightings are kept in this browser. <button id="journal-reset" class="btn">Clear journal</button></p></div>';
+    + '<div id="journal-cards"></div><div id="journal-extra"></div><p class="journal-note">Sightings are kept in this browser. <button id="journal-reset" class="btn">Clear journal</button></p></div>';
   document.body.append(panel);
   $('journal-close').onclick = () => open(false);
   $('journal-reset').onclick = () => { journal = {}; saveJournal(); for (const a of animals) a.logged = false; renderJournal(); updateBadge(); };
@@ -479,7 +504,10 @@ let fr = null, projView = null, sph = null, reskinT = 0;
 function frame(dt, time) {
   if (!animals.length) return;
   const cam = api.camera, vp = api.viewPos();
-  carP.x = api.S.x; carP.z = api.S.z; carP.sp = api.S.started ? Math.hypot(api.S.vx || 0, api.S.vz || 0) : 0;
+  const foot = window.GOAPlayer?.onFoot?.();
+  if (foot) { const pp = window.GOAPlayer.position(); carP.x = pp.x; carP.z = pp.z; carP.sp = pp.speed; carP.foot = true; }
+  else { carP.x = api.S.x; carP.z = api.S.z; carP.sp = api.S.started ? Math.hypot(api.S.vx || 0, api.S.vz || 0) : 0; carP.foot = false; }
+  hostile = !!window.GOASurvival?.active?.(); night = !!window.GOASurvival?.isNight?.();
   cam.updateMatrixWorld(); projView.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse); fr.setFromProjectionMatrix(projView);
   // winter coats follow the season: swap geometry when the snow comes or goes
   reskinT -= dt;
@@ -493,7 +521,8 @@ function frame(dt, time) {
   }
   for (const a of animals) {
     const d = Math.hypot(a.x - vp.x, a.z - vp.z);
-    const active = d < 420 || a.state === 'flee';
+    if (a.gone) { a.respawnT -= dt; if (a.respawnT <= 0 && d > 160) respawn(a); continue; }
+    const active = d < 420 || a.state === 'flee' || a.state === 'charge';
     if (active) think(a, dt);
     const show = d < (a.kind === 'rabbit' ? 160 : a.kind === 'fox' ? 220 : 380);
     a.mesh.visible = show;
@@ -502,7 +531,7 @@ function frame(dt, time) {
     a.mesh.castShadow = d < 90;
     // sighting: in view, near enough, for a moment
     sph.center.set(a.x, api.groundY(a.x, a.z) + a.spec.shoulder * a.sc * 0.6, a.z); sph.radius = a.spec.len * a.sc;
-    if (d < a.spec.spot && fr.intersectsSphere(sph) && api.S.started) { a.vis += dt; if (a.vis > 0.9 && !a.logged) { a.logged = true; record(a, d); } }
+    if (a.state !== 'down' && d < a.spec.spot && fr.intersectsSphere(sph) && api.S.started) { a.vis += dt; if (a.vis > 0.9 && !a.logged) { a.logged = true; record(a, d); } }
     else a.vis = Math.max(0, a.vis - dt * 0.5);
   }
   if (isOpen()) { panelT -= dt; if (panelT <= 0) { panelT = 1; renderJournal(); } }
@@ -512,14 +541,103 @@ let panelT = 0;
 function init(hooks) {
   api = hooks; T = window.THREE;
   fr = new T.Frustum(); projView = new T.Matrix4(); sph = new T.Sphere();
-  furMat = new T.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
-  furMat.onBeforeCompile = (sh) => { // a touch of soft rim light so dark coats still read against the grass
-    sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\nfloat rimK = pow(1.0 - clamp(dot(normalize(vNormal), normalize(vViewPosition)), 0.0, 1.0), 3.0); totalEmissiveRadiance += diffuseColor.rgb * rimK * 0.22;');
-  };
-  furMat.customProgramCacheKey = () => 'wildlife-fur';
+  initMaterial();
   buildPanel();
   populate();
 }
 
-window.GOAWildlife = { init, frame, open, isOpen, close() { open(false); }, species: SPECIES, animals, journal: () => journal };
+
+// ------------------------------------------------------------------ hunting API (used by the on-foot player, AR and VR)
+const _o = new Float64Array(3);
+/** Find the first animal a shot from (ox,oy,oz) along unit (dx,dy,dz) would hit within maxD metres.
+    Bodies are capsules along the spine plus a head sphere; chest and head hits count as vital. */
+function raycast(ox, oy, oz, dx, dy, dz, maxD, list = animals) {
+  let best = null;
+  for (const a of list) {
+    if (a.gone || !a.mesh.visible && list === animals) continue;
+    const sc = a.sc, R = a.rg.R * sc * 1.05, half = a.rg.L * 0.5 * sc + R * 0.3;
+    const fx = Math.sin(a.yaw), fz = Math.cos(a.yaw);
+    const by = a.mesh.position.y + (a.state === 'down' ? R : a.rg.H * sc);
+    const cx = a.x, cz = a.z;
+    // closest approach between the shot ray and the spine segment (cx,by,cz) +/- f*half
+    const px = cx - fx * half, pz = cz - fz * half, qx = fx * 2 * half, qz = fz * 2 * half;
+    const wx = ox - px, wy = oy - by, wz = oz - pz;
+    const aa = dx * dx + dy * dy + dz * dz, bb = dx * qx + dz * qz, cc = qx * qx + qz * qz, dd = dx * wx + dy * wy + dz * wz, ee = qx * wx + qz * wz;
+    const den = aa * cc - bb * bb; let t = den > 1e-9 ? (bb * ee - cc * dd) / den : 0, u = den > 1e-9 ? (aa * ee - bb * dd) / den : 0;
+    u = clamp(u, 0, 1); t = Math.max(0, (dx * (px + qx * u - ox) + dy * (by - oy) + dz * (pz + qz * u - oz)) / aa);
+    if (t > maxD) continue;
+    const hx = ox + dx * t - (px + qx * u), hy = oy + dy * t - by, hz = oz + dz * t - (pz + qz * u);
+    let hit = Math.hypot(hx, hy, hz) < R, zone = u > 0.62 ? 'vital' : 'body';
+    // head
+    const hd = a.spec.neckLen * sc + a.spec.headLen * sc * 0.5, hx2 = cx + fx * (half + hd * 0.7), hz2 = cz + fz * (half + hd * 0.7), hy2 = by + hd * 0.55;
+    const t2 = Math.max(0, dx * (hx2 - ox) + dy * (hy2 - oy) + dz * (hz2 - oz));
+    if (!hit && t2 < maxD && Math.hypot(ox + dx * t2 - hx2, oy + dy * t2 - hy2, oz + dz * t2 - hz2) < a.spec.headR * sc * 1.6) { hit = true; t = t2; zone = 'vital'; }
+    if (hit && (!best || t < best.dist)) best = { animal: a, dist: t, zone, point: [ox + dx * t, oy + dy * t, oz + dz * t] };
+  }
+  return best;
+}
+/** Apply a hit. Returns 'down', 'wounded' or null. */
+function hit(a, damage, zone, fromX, fromZ) {
+  if (!a || a.state === 'down' || a.gone) return null;
+  a.hp -= damage * (zone === 'vital' ? 1.7 : 1);
+  if (a.hp <= 0) {
+    a.state = 'down'; a.speed = 0; a.downT = 0; a.roll = 0; a.yaw += (Math.random() - 0.5) * 0.6;
+    return 'down';
+  }
+  a.wounded = true; a.panic = 6;
+  if (a.kind === 'bear' && carP.foot && Math.random() < 0.55) { a.state = 'charge'; a.t = 10; }
+  else { a.state = 'flee'; if (a.herd) { a.herd.x = a.x + (a.x - fromX) * 2; a.herd.z = a.z + (a.z - fromZ) * 2; } }
+  return 'wounded';
+}
+/** A gunshot or loud noise: everything nearby bolts. */
+function noise(x, z, radius) {
+  for (const a of animals) {
+    if (a.gone || a.state === 'down' || a.state === 'charge') continue;
+    if (Math.hypot(a.x - x, a.z - z) < radius * (a.kind === 'bear' ? 0.7 : 1)) { a.state = 'flee'; a.panic = 3; a.fdx = Math.sign(a.x - x) || 1; a.fdz = Math.sign(a.z - z) || 1; a.chk = 0; }
+  }
+}
+function nearestDown(x, z, r) {
+  let best = null, bd = r;
+  for (const a of animals) if (a.state === 'down' && !a.gone) { const d = Math.hypot(a.x - x, a.z - z); if (d < bd) { bd = d; best = a; } }
+  return best;
+}
+/** Tag a harvested animal: logs the trophy, removes it, and schedules a new animal out of sight later. */
+function tag(a) {
+  if (!a || a.state !== 'down') return null;
+  const kg = Math.round(lerp(a.spec.kg[0], a.spec.kg[1], clamp((a.sc - 0.9) / 0.26, 0, 1) * 0.7 + Math.random() * 0.3) * (a.bull ? 1.15 : 1));
+  const j = journal[a.kind] || (journal[a.kind] = { seen: 0, first: null, closest: 9999, where: '' });
+  j.harvested = (j.harvested || 0) + 1; j.best = Math.max(j.best || 0, kg); if (!j.seen) { j.seen = 1; j.first = new Date().toISOString().slice(0, 10); }
+  j.where = placeName(a.x, a.z); saveJournal(); renderJournal(); updateBadge();
+  a.gone = true; a.mesh.visible = false; a.respawnT = 150 + rnd() * 120;
+  return { kind: a.kind, name: a.spec.name, kg, bull: a.bull, meat: Math.max(1, Math.round(kg / 12)) };
+}
+function respawn(a) {
+  const h = a.herd || a.home, s = findSpot(h.x, h.z, 10, 60) || [a.home.x, a.home.z];
+  Object.assign(a, { x: s[0], z: s[1], gone: false, state: 'graze', t: 5, hp: a.spec.hp * a.sc, wounded: false, downT: 0, roll: 0, strikes: 0, speed: 0, logged: false, panic: 0 });
+  a.mesh.visible = true;
+}
+/** A standalone animal (not part of the valley population), e.g. for AR. ground(x,z) gives the floor height. */
+function makeAnimal(kind, opts = {}) {
+  if (!T) T = window.THREE;
+  if (!furMat) initMaterial();
+  const spec = SPECIES[kind], bull = !!opts.bull, winter = !!opts.winter, key = kind + (bull ? 'B' : '') + (winter ? 'W' : '');
+  const rg = rig(spec, bull);
+  if (!geoCache.has(key)) geoCache.set(key, buildGeometry(spec, rig(spec, bull), winter));
+  const mesh = new T.SkinnedMesh(geoCache.get(key), furMat);
+  mesh.add(rg.root); mesh.updateMatrixWorld(true); mesh.bind(new T.Skeleton(rg.list)); mesh.castShadow = true;
+  const sc = opts.scale || 1; mesh.scale.setScalar(sc);
+  const a = { kind, spec, mesh, rg, bull, sc, x: opts.x || 0, z: opts.z || 0, yaw: opts.yaw || 0, speed: 0, want: 0, state: 'graze', t: 3, phase: Math.random(),
+    graze: 1, alertK: 0, look: 0, flick: 0, pitch: 0, hp: spec.hp, roll: 0, downT: 0, ground: opts.ground || (() => 0), standalone: true };
+  return { animal: a, pose: (dt, time) => pose(a, dt, time) };
+}
+function initMaterial() {
+  furMat = new T.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
+  furMat.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\nfloat rimK = pow(1.0 - clamp(dot(normalize(vNormal), normalize(vViewPosition)), 0.0, 1.0), 3.0); totalEmissiveRadiance += diffuseColor.rgb * rimK * 0.22;');
+  };
+  furMat.customProgramCacheKey = () => 'wildlife-fur';
+}
+
+window.GOAWildlife = { init, frame, open, isOpen, close() { open(false); }, species: SPECIES, animals, journal: () => journal,
+  raycast, hit, noise, nearestDown, tag, makeAnimal, refresh() { renderJournal(); } };
 })();

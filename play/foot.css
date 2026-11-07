@@ -1,0 +1,68 @@
+/* on-foot HUD: crosshair, scope, prompts, weapon and vitals */
+#foot-hud{display:none;position:fixed;inset:0;pointer-events:none;z-index:30;font-family:Barlow,system-ui,sans-serif}
+body.on-foot #foot-hud{display:block}
+body.on-foot #hud,body.on-foot #mini,body.on-foot #speedo{opacity:.0;visibility:hidden}
+#fh-cross{position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;opacity:.55;transition:opacity .15s,transform .15s}
+#fh-cross::before,#fh-cross::after{content:"";position:absolute;background:#fff;box-shadow:0 0 2px #000}
+#fh-cross::before{left:10px;top:0;width:2px;height:22px}#fh-cross::after{top:10px;left:0;height:2px;width:22px}
+body.aiming #fh-cross{opacity:.95;transform:scale(.6)}
+#fh-hit{position:absolute;left:50%;top:50%;transform:translate(-50%,-52%);font:700 34px/1 sans-serif;color:#fff;opacity:0;text-shadow:0 0 4px #000}
+#fh-hit.vital{color:#ff5a3a}
+#fh-scope{position:absolute;inset:0;display:none;background:radial-gradient(circle at 50% 50%,transparent 0,transparent 36vmin,#000 36.4vmin)}
+#fh-scope.on{display:block}
+#fh-scope div{position:absolute;left:50%;top:50%;width:72vmin;height:72vmin;transform:translate(-50%,-50%);border-radius:50%;box-shadow:inset 0 0 6vmin rgba(0,0,0,.6);
+ background:linear-gradient(#000,#000) center/1px 100% no-repeat,linear-gradient(#000,#000) center/100% 1px no-repeat}
+#fh-scope.on~#fh-cross{display:none}
+#fh-hurt{position:absolute;inset:0;opacity:0;background:radial-gradient(circle,transparent 45%,rgba(160,20,10,.55))}
+#fh-prompt{position:absolute;left:50%;bottom:24%;transform:translateX(-50%);display:none;background:rgba(24,34,26,.82);color:#f0eddf;padding:8px 16px;border-radius:6px;font-weight:600;letter-spacing:.04em}
+#fh-weapon{position:absolute;right:20px;bottom:20px;background:rgba(24,34,26,.78);color:#f0eddf;padding:10px 14px;border-radius:8px;min-width:220px;text-align:right}
+#fh-weapon b{display:block;font-size:15px;letter-spacing:.03em}#fh-weapon span{display:block;font-size:22px;font-weight:700}#fh-weapon small{display:block;font-size:11px;opacity:.75;margin-top:2px}
+#fh-bars{position:absolute;left:20px;bottom:20px;display:grid;gap:6px;background:rgba(24,34,26,.72);padding:10px 12px;border-radius:8px;color:#f0eddf;font-size:11px;letter-spacing:.06em;text-transform:uppercase;min-width:190px}
+#fh-bars label{display:grid;grid-template-columns:70px 1fr;align-items:center;gap:8px}
+#fh-bars i{display:block;height:7px;border-radius:4px;background:rgba(255,255,255,.18);overflow:hidden}#fh-bars b{display:block;height:100%;background:#9cc46a;transition:width .3s}
+#fh-bars b#fh-hp{background:#e0644a}
+@media(max-width:700px){#fh-weapon{min-width:0;bottom:120px}#fh-bars{bottom:120px}}
+/* Adventure panel */
+#adventure{display:none;left:50%;top:4vh;transform:translateX(-50%);width:min(1000px,95vw);max-height:92vh;z-index:58;flex-direction:column;overflow:hidden}
+#adventure.open{display:flex}
+.adv-content{overflow:auto;padding:16px 18px;touch-action:pan-y}
+.adv-content h3{margin:14px 0 6px;font-size:15px;letter-spacing:.08em;text-transform:uppercase}.adv-content>p{font-size:13px;color:#4a5945;margin:0 0 10px}
+.adv-modes{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.adv-mode{display:grid;gap:6px;text-align:left;padding:14px;border:1px solid #bdc7ac;border-radius:8px;background:#e5e8dc;cursor:pointer;font:inherit;color:#1f2a1c}
+.adv-mode b{font-size:18px}.adv-mode span{font-size:12.5px;line-height:1.45;color:#3a4735}.adv-mode em{font-style:normal;font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#3f5a2c}
+.adv-mode.on{background:#2f4a33;color:#f0eddf;border-color:#2f4a33}.adv-mode.on span,.adv-mode.on em{color:#d8dccb}
+.adv-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.adv-avatar{display:grid;grid-template-columns:80px 1fr;grid-template-rows:auto auto 1fr;column-gap:12px;text-align:left;padding:10px;border:1px solid #bdc7ac;border-radius:8px;background:#ecebe5;cursor:pointer;font:inherit;color:#1f2a1c}
+.adv-avatar img{grid-row:1/4;width:80px;height:100px;object-fit:cover;border-radius:6px;background:linear-gradient(#cfd9c8,#a9b89a)}
+.adv-avatar b{font-size:15px}.adv-avatar span{font-size:12px;font-weight:600;color:#3f5a2c}.adv-avatar small{font-size:11.5px;line-height:1.4;color:#4a5945}
+.adv-avatar.on{outline:3px solid #e2a23a;background:#f3ead2}
+.adv-grid.small .adv-avatar{grid-template-columns:56px 1fr}.adv-grid.small .adv-avatar img{width:56px;height:70px}
+.adv-help{font-size:12px!important;line-height:1.6}
+@media(max-width:760px){.adv-modes,.adv-grid{grid-template-columns:1fr}}
+/* fishing */
+#fish-ui{display:none;position:fixed;left:50%;bottom:18%;transform:translateX(-50%);z-index:31;background:rgba(24,34,26,.85);color:#f0eddf;padding:10px 16px;border-radius:8px;min-width:280px;text-align:center;font-family:Barlow,system-ui,sans-serif}
+#fish-ui.on{display:block}#fish-meter{height:10px;border-radius:5px;background:rgba(255,255,255,.2);margin:8px 0 4px;overflow:hidden;position:relative}
+#fish-meter i{display:block;height:100%;width:0}#fish-meter span{position:absolute;left:80%;top:0;bottom:0;width:2px;background:#fff}
+#fish-ui small{opacity:.8}
+/* survival */
+#surv-compass{display:none;position:fixed;left:50%;top:14px;transform:translateX(-50%);width:min(520px,80vw);height:40px;z-index:31;pointer-events:none;font-family:Barlow,system-ui,sans-serif}
+body.on-foot #surv-compass.on{display:block}
+#sc-strip{position:absolute;inset:0;background:rgba(24,34,26,.72);border-radius:20px;overflow:hidden;color:#f0eddf}
+#sc-strip span{position:absolute;top:50%;transform:translate(-50%,-50%);font-size:12px;opacity:.65}#sc-strip span.card{font-weight:700;font-size:15px;opacity:1}
+#sc-strip span.mark{color:#ef8a3d;font-size:16px;opacity:1}#sc-strip span.camp{color:#ffd28a;font-size:17px;opacity:1}
+#sc-needle{position:absolute;left:50%;top:-4px;width:2px;height:48px;background:#e2a23a}
+#sc-info{position:absolute;top:44px;left:0;right:0;text-align:center;color:#fff;font-size:12px;text-shadow:0 1px 3px #000}
+#surv-vitals{display:none;gap:6px}body.survival #surv-vitals{display:grid}
+#surv-vitals label{display:grid;grid-template-columns:70px 1fr;align-items:center;gap:8px}#surv-vitals b{background:#d9b44a!important}#surv-vitals label:nth-child(2) b{background:#5fa8d8!important}#surv-vitals label:nth-child(3) b{background:#e08a4a!important}
+#surv-vitals p{margin:2px 0 0;font-size:11px;text-transform:none;letter-spacing:0}
+#surv-end{display:none;left:50%;top:30%;transform:translateX(-50%);width:min(460px,90vw);z-index:70;padding:24px;text-align:center}
+#surv-end.open{display:block}#surv-end div{display:flex;gap:10px;justify-content:center;margin-top:14px}
+/* journal extras */
+.journal-section{margin-top:16px;padding:12px 14px;background:#e5e8dc;border:1px solid #bdc7ac;border-radius:6px}.journal-section h3{margin:0 0 6px;font-size:15px}.journal-section p{font-size:12.5px;margin:2px 0}
+/* AR hunting overlay */
+#xr-hunt{display:none}#xr-hunt.on{display:block}
+#xr-hunt i{position:fixed;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 3px #000;pointer-events:none}
+#xr-hunt i::after{content:"";position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px 0 0 -2px;background:#ff5a3a;border-radius:50%}
+#xr-hunt b{position:fixed;left:50%;top:14px;transform:translateX(-50%);background:rgba(24,34,26,.8);color:#f0eddf;padding:8px 14px;border-radius:8px;font:600 14px Barlow,system-ui,sans-serif;white-space:nowrap}
+#xr-hunt div{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);display:flex;gap:8px}
+#xr-hunt button{background:rgba(24,34,26,.85);color:#f0eddf;border:1px solid #d8c493;border-radius:6px;padding:8px 12px;font:600 13px Barlow,system-ui,sans-serif}

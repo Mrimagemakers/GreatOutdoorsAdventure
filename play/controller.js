@@ -50,6 +50,8 @@
    return;
   }
   if(state.pressed[9]){hooks.pause();return;}if(state.pressed[8]){hooks.map();return;}
+  if(hooks.onFoot?.()){hooks.footPad?.(state,pad);return;}
+  if(state.pressed[14]){hooks.exitVehicle?.();return;}
   // Require neutral controls after reconnecting or closing a menu.
   if(blocked){if(state.throttle<.05&&state.brake<.05&&!state.buttons[0]&&!state.buttons[1]&&Math.abs(state.steer)<.05)blocked=false;else return;}
   if(state.pressed[2])hooks.reset();if(state.pressed[3])hooks.camera();

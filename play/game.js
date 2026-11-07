@@ -1630,6 +1630,8 @@ addEventListener('keydown', (e) => {
   if(window.GOAXR?.isOpen()){if(e.code==='Escape')window.GOAXR.close();return;}
   if (window.GOALocations?.isOpen()) { if(e.code==='Escape')window.GOALocations.close(); return; }
   if (window.GOAWildlife?.isOpen()) { if(e.code==='Escape')window.GOAWildlife.close(); return; }
+  if (window.GOACampLife?.isOpen()) { if(e.code==='Escape')window.GOACampLife.close(); return; }
+  if (window.GOAPlayer?.onFoot() && e.code !== 'Escape' && e.code !== 'KeyM' && e.code !== 'KeyJ' && e.code !== 'KeyG' && e.code !== 'KeyL') return; // on foot: the player module owns the keys
   if (window.GOAExtension?.isOpen()) { if(e.code==='Escape')window.GOAExtension.close(); return; }
   if (e.code === 'Escape') { if (mapOpen()) openMap(false); else openSettings(); e.preventDefault(); return; }
   if (e.code === 'KeyM' && mapOpen()) { openMap(false); return; }
@@ -1868,8 +1870,9 @@ function buildSettings() {
         const b = document.createElement('button'); b.className = 'vcard' + (P.vehicle === id ? ' on' : '');
         const cv = document.createElement('div'); cv.className = 'vpic';
         if (V.catalog) {
-          const im = new Image(); im.src = `assets/garage/${V.baseModel}.webp`;
-          im.alt = `${V.name} — ${V.baseModel} visual stand-in`; im.decoding = 'async';
+          const im = new Image(); im.src = `assets/garage/catalog/${id}.webp`;
+          im.onerror = () => { im.onerror = null; im.src = `assets/garage/${V.baseModel}.webp`; };
+          im.alt = `${V.name} — reference design (drives with the ${V.baseModel} 3D model)`; im.decoding = 'async';
           cv.appendChild(im);
 
         } else {
@@ -1877,7 +1880,7 @@ function buildSettings() {
           im.onerror = () => { const c = document.createElement('canvas'); c.width = 220; c.height = 100; drawProfile(c, id); cv.replaceChildren(c); };
           cv.appendChild(im);
         }
-        if (P.vehicle === id) { const tag = document.createElement('span'); tag.className = 'vtag'; tag.textContent = V.catalog ? 'Stand-in selected' : 'Driving'; cv.appendChild(tag); }
+        if (P.vehicle === id) { const tag = document.createElement('span'); tag.className = 'vtag'; tag.textContent = V.catalog ? 'Driving · 3D stand-in' : 'Driving'; cv.appendChild(tag); }
         const txt = document.createElement('div');
         const bars = Object.entries(V.bars).map(([k, v]) => `<span>${k.toUpperCase()}</span><i><em style="width:${Math.round(v * 100)}%"></em></i>`).join('');
         txt.innerHTML = `<b>${V.name.toUpperCase()}</b><small>${V.desc}</small><div class="bars">${bars}</div>`;
@@ -2299,8 +2302,8 @@ function placeWheels(dt, inp, nvf, grip, pitch, roll) {
   }
 }
 function physics(dt) {
-  if ($('settings').classList.contains('open') || mapOpen() || window.GOAExtension?.isOpen() || window.GOALocations?.isOpen() || window.GOAWildlife?.isOpen() || window.GOAXR?.isOpen() || $('board').style.display==='block' || window.GOADriveUI?.isOpen()) return {vf:0,speed:Math.hypot(S.vx,S.vz),sliding:false};
-  const pad = window.GOAController?.input() || {};
+  if ($('settings').classList.contains('open') || mapOpen() || window.GOAExtension?.isOpen() || window.GOALocations?.isOpen() || window.GOAWildlife?.isOpen() || window.GOACampLife?.isOpen() || window.GOAXR?.isOpen() || $('board').style.display==='block' || window.GOADriveUI?.isOpen()) return {vf:0,speed:Math.hypot(S.vx,S.vz),sliding:false};
+  const pad = window.GOAXR?.driveInput?.() || window.GOAController?.input() || {}; // VR controllers drive through the same input
   const inp = S.ctrl && !$('settings').classList.contains('open') && !mapOpen() ? {
     g: Math.max(keys.g || 0, touch.g, pad.throttle || 0), b: Math.max(keys.b || 0, touch.b, pad.brake || 0), d: P.handbrake ? Math.max(keys.d || 0, touch.d, pad.handbrake || 0) : 0,
     st: clamp((Math.max(keys.r || 0, touch.r) - Math.max(keys.l || 0, touch.l)) + (pad.steer || 0), -1, 1), n: Math.max(keys.n || 0, touch.n, pad.nitro || 0),
@@ -2540,6 +2543,7 @@ const TOD = {
   morning: { elev: 13, az: 0.3, sun: C('#ffd9b4'), i: 0.85, hor: C('#ecdccd'), top: C('#7799c4'), horK: 0.5 },
   midday: { elev: 62, az: 1.4, sun: C('#fff8ec'), i: 1.08, hor: C('#d0dce6'), top: C('#5a8fd0'), horK: 0.4 },
   golden: { elev: 5, az: 2.6, sun: C('#ffa860'), i: 0.75, hor: C('#f0c08e'), top: C('#5f7aa6'), horK: 0.75 },
+  night: { elev: 24, az: 3.6, sun: C('#7f97d6'), i: 0.16, hor: C('#2a3550'), top: C('#070b16'), horK: 0.6 }, // moonlight, used by Survival
 };
 const sunDir = new T.Vector3(); const _sunP = new T.Vector3(), _camD = new T.Vector3();
 const live = { top: new T.Color('#6f9ccc'), hor: new T.Color('#c9d6e0'), sun: new T.Color('#ffe2bd'), sunI: 3, elev: 20, az: 2.45, fog: 520, cap: 0.9, hemiS: new T.Color(), hemiG: new T.Color() };
@@ -2774,12 +2778,16 @@ function drawBigMap() {
     bctx.beginPath(); bctx.moveTo(mx, mz); bctx.lineTo(mx - 8 * dpr, mz - 20 * dpr); bctx.arc(mx, mz - 22 * dpr, 8 * dpr, Math.PI * 0.85, Math.PI * 0.15); bctx.closePath(); bctx.fill(); bctx.stroke();
     bctx.fillStyle = '#1e2226'; bctx.fillText(fmtDist(Math.hypot(MK.x - S.x, MK.z - S.z)), mx + 12 * dpr, mz - 18 * dpr);
   }
-  bctx.save(); bctx.translate(X(S.x), Z(S.z)); bctx.rotate(-S.yaw + Math.PI);
+  for (const layer of window.GOAMapLayers || []) { try { layer(bctx, X, Z, dpr); } catch (e) { /* layer failed */ } }
+  if (window.GOAPlayer?.onFoot()) { bctx.fillStyle = '#5a6b4a'; bctx.fillRect(X(S.x) - 4 * dpr, Z(S.z) - 4 * dpr, 8 * dpr, 8 * dpr); }
+  const me = window.GOAPlayer?.onFoot() ? window.GOAPlayer.position() : { x: S.x, z: S.z, yaw: S.yaw };
+  bctx.save(); bctx.translate(X(me.x), Z(me.z)); bctx.rotate(-(window.GOAPlayer?.onFoot() ? window.GOAPlayer.state.camYaw : S.yaw) + Math.PI);
   bctx.fillStyle = '#E8B53A'; bctx.strokeStyle = '#1e2226'; bctx.lineWidth = 2 * dpr;
   bctx.beginPath(); bctx.moveTo(0, -12 * dpr); bctx.lineTo(9 * dpr, 10 * dpr); bctx.lineTo(0, 5 * dpr); bctx.lineTo(-9 * dpr, 10 * dpr); bctx.closePath(); bctx.fill(); bctx.stroke(); bctx.restore();
   bctx.font = `700 ${18 * dpr}px Valley, sans-serif`; bctx.fillStyle = '#1e2226'; bctx.fillText('N', ox + side - 26 * dpr, oy + 26 * dpr);
 }
 function mapOpen() { return $('bigmap').classList.contains('open'); }
+function panelsOpen() { return $('settings').classList.contains('open') || mapOpen() || !!window.GOAExtension?.isOpen() || !!window.GOALocations?.isOpen() || !!window.GOAWildlife?.isOpen() || !!window.GOACampLife?.isOpen() || !!window.GOAXR?.isOpen() || $('board').style.display === 'block' || !!window.GOADriveUI?.isOpen() || !!$('surv-end')?.classList.contains('open'); }
 function openMap(on) {
   const el = $('bigmap'); const v = on === undefined ? !el.classList.contains('open') : on;
   el.classList.toggle('open', v); for (const k in keys) keys[k] = 0;
@@ -2883,9 +2891,10 @@ function frame(now,xrFrame) {
   if(window.GOAXR?.active()){if(window.GOAXR.previewActive())window.GOAController?.poll(dt);window.GOAXR.frame(dt,clockT,xrFrame);return;}
   window.GOAController?.poll(dt);
   if (S.started) {
-    for (let i = 0; i < 2; i++) { const r = physics(dt / 2); if (r) st = r; }
-    if (S.ctrl && !$('settings').classList.contains('open') && !mapOpen() && !window.GOAExtension?.isOpen() && !window.GOALocations?.isOpen() && !window.GOAWildlife?.isOpen() && !window.GOAXR?.isOpen() && $('board').style.display!=='block' && !window.GOADriveUI?.isOpen()) S.lapT += dt;
-    updateCamera(dt, false);
+    if (window.GOAPlayer?.onFoot()) { window.GOAPlayer.update(dt); }
+    else { for (let i = 0; i < 2; i++) { const r = physics(dt / 2); if (r) st = r; } }
+    if (S.ctrl && !$('settings').classList.contains('open') && !mapOpen() && !window.GOAExtension?.isOpen() && !window.GOALocations?.isOpen() && !window.GOAWildlife?.isOpen() && !window.GOACampLife?.isOpen() && !window.GOAXR?.isOpen() && $('board').style.display!=='block' && !window.GOADriveUI?.isOpen()) S.lapT += dt;
+    if (!window.GOAPlayer?.onFoot()) updateCamera(dt, false);
   } else {
     // a wide, quiet view over the valley toward the mountains, the car parked at the roadside
     car.position.set(S.x, S.y, S.z); car.rotation.set(0, S.yaw, 0);
@@ -2908,6 +2917,7 @@ function frame(now,xrFrame) {
   updateEnv(dt, clockT);
   updateBirds(dt, clockT);
   window.GOAWildlife?.frame(dt, clockT);
+  window.GOACampLife?.frame(dt, clockT); window.GOASurvival?.frame(dt);
   fpsAcc.n++; fpsAcc.t += dt;
   if (fpsAcc.t > 0.75) {
     fpsAcc.last = fpsAcc.n / fpsAcc.t; fpsAcc.n = 0; fpsAcc.t = 0;
@@ -3026,10 +3036,10 @@ async function boot() {
   const cursor=document.createElement('div');cursor.id='controller-map-cursor';$('bigmap').append(cursor);bigC.tabIndex=0;bigC.setAttribute('aria-label','Map marker cursor. Move left stick, then A or Cross to set marker. D-pad moves to map controls.');
   let cursorX=.5,cursorY=.5;
   function mapCursor(){const r=bigC.getBoundingClientRect(),p=$('bigmap').getBoundingClientRect();cursor.style.left=(r.left-p.left+r.width*cursorX)+'px';cursor.style.top=(r.top-p.top+r.height*cursorY)+'px';cursor.style.display=mapOpen()?'block':'none';}
-  function currentScope(){if(window.GOADriveUI?.isOpen())return $('drive-menu');if(window.GOAXR.previewActive())return $('xr-overlay');if(window.GOAXR.isOpen())return $('xr-panel');if(window.GOALocations.isOpen())return $('destinations');if(window.GOAWildlife?.isOpen())return $('journal');if(window.GOAExtension.isOpen())return $('expedition');if($('board').style.display==='block')return $('board');if($('summary').style.display==='block')return $('summary');if(mapOpen())return $('bigmap');if($('settings').classList.contains('open'))return $('settings');if(!S.started)return $('title');if($('build').classList.contains('open'))return $('build');return null;}
-  window.GOAController.setHooks({scope:currentScope,
+  function currentScope(){if(window.GOADriveUI?.isOpen())return $('drive-menu');if(window.GOAXR.previewActive())return $('xr-overlay');if(window.GOAXR.isOpen())return $('xr-panel');if(window.GOALocations.isOpen())return $('destinations');if(window.GOAWildlife?.isOpen())return $('journal');if(window.GOACampLife?.isOpen())return $('adventure');if(window.GOAExtension.isOpen())return $('expedition');if($('board').style.display==='block')return $('board');if($('summary').style.display==='block')return $('summary');if(mapOpen())return $('bigmap');if($('settings').classList.contains('open'))return $('settings');if(!S.started)return $('title');if($('build').classList.contains('open'))return $('build');return null;}
+  window.GOAController.setHooks({scope:currentScope,onFoot(){return !!window.GOAPlayer?.onFoot();},footPad(state,pad){window.GOAPlayer?.pad(state,pad);},exitVehicle(){window.GOAPlayer?.exitVehicle();},
    pause(){if(S.started&&S.ctrl)openSettings(true);},
-   back(){const s=currentScope();if(s?.id==='drive-menu')window.GOADriveUI.close();else if(s?.id==='xr-overlay')window.GOAXR.end();else if(s?.id==='xr-panel')window.GOAXR.close();else if(s?.id==='destinations')window.GOALocations.close();else if(s?.id==='journal')window.GOAWildlife.close();else if(s?.id==='expedition')window.GOAExtension.close();else if(s?.id==='bigmap')openMap(false);else if(s?.id==='settings')openSettings(false);else if(s?.id==='board')$('board').style.display='none';else if(s?.id==='build')$('build').classList.remove('open');},
+   back(){const s=currentScope();if(s?.id==='drive-menu')window.GOADriveUI.close();else if(s?.id==='xr-overlay')window.GOAXR.end();else if(s?.id==='xr-panel')window.GOAXR.close();else if(s?.id==='destinations')window.GOALocations.close();else if(s?.id==='journal')window.GOAWildlife.close();else if(s?.id==='adventure')window.GOACampLife.close();else if(s?.id==='expedition')window.GOAExtension.close();else if(s?.id==='bigmap')openMap(false);else if(s?.id==='settings')openSettings(false);else if(s?.id==='board')$('board').style.display='none';else if(s?.id==='build')$('build').classList.remove('open');},
    map(){window.GOAXR.close();window.GOALocations.close();window.GOAWildlife?.close();window.GOAExtension.close();openSettings(false);openMap();mapCursor();},
    mapMove(x,y,dt){cursorX=clamp(cursorX+x*dt*.45,.02,.98);cursorY=clamp(cursorY+y*dt*.45,.02,.98);mapCursor();},
    mapPlace(){const x=(cursorX*bigC.width-bigView.ox)/bigView.s-TS/2,z=(cursorY*bigC.height-bigView.oy)/bigView.s-TS/2;if(Math.abs(x)<=TS/2&&Math.abs(z)<=TS/2){setMarker(x,z);drawBigMap();$('mkclear').disabled=false;$('mkgo').disabled=false;}},
@@ -3042,9 +3052,15 @@ async function boot() {
    stop(){S.vx=S.vz=S.w=S.steer=S.vy=0;S.nitroOn=false;S.nitroFx=0;if(actx&&engineGain)engineGain.gain.setTargetAtTime(0,actx.currentTime,.1);if(actx&&windGain)windGain.gain.setTargetAtTime(.06*P.ambVol,actx.currentTime,.2);},
    restoreView(){updateCamera(0,true);queueMicrotask(()=>{if(!renderer.xr.isPresenting){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();applyPixelRatio();resizeUniforms();}});},openSettings,travel(id){window.GOALocations.travel(id);car.position.set(S.x,S.y,S.z);car.rotation.set(0,S.yaw,0);},
    snow(){return SV.snow;},vehicle(){return vehModel?.root;},treeModel(){return near3d.models.pine;},
-   tickVR(dt,time){updateEnv(dt,time);updateTreeRange();updateNear3D();updateGrass(S.x,S.z,false);updateBirds(dt,time);window.GOAWildlife?.frame(dt,time);}
+   tickVR(dt,time){updateEnv(dt,time);updateTreeRange();updateNear3D();updateGrass(S.x,S.z,false);updateBirds(dt,time);window.GOAWildlife?.frame(dt,time);window.GOACampLife?.frame(dt,time);window.GOASurvival?.frame(dt);},
+   physicsStep(dt){if(window.GOAPlayer?.onFoot())return;for(let i=0;i<2;i++)physics(dt/2);},player(){return window.GOAPlayer;},resetCar(){resetCar(false);}
   });
   try{window.GOAWildlife?.init({scene,camera,S,P,keys,WATER,groundY,terrainH,nearestRoad,toast,openSettings,openMap,snow(){return SV.snow;},viewPos(){return cameraWorldPosition();}});}catch(error){console.warn('Wildlife unavailable',error);}
+  const outdoorHooks={scene,camera,renderer,S,P,keys,WATER,TX,groundY,terrainH,nearestRoad,toast,openSettings,openMap,setPref,panelsOpen,
+   snow(){return SV.snow;},night(){return P.tod==='night';},viewPos(){return cameraWorldPosition();},snapCamera(){updateCamera(0,true);},
+   setMarker(x,z){if(x===null||x===undefined)setMarker(null,0,true);else setMarker(x,z,true);},
+   travel(id){if(window.GOAPlayer?.onFoot())window.GOAPlayer.enterVehicle(true);window.GOALocations.travel(id);car.position.set(S.x,S.y,S.z);car.rotation.set(0,S.yaw,0);updateCamera(0,true);}};
+  for(const m of ['GOAPlayer','GOACampLife','GOAFishing','GOASurvival']){try{window[m]?.init(outdoorHooks);}catch(error){console.warn(m+' unavailable',error);}}
   const requestedLocation=new URLSearchParams(location.search).get('location');
   if(window.GOALocations.list().some(p=>p.id===requestedLocation))window.GOALocations.travel(requestedLocation);
   renderer.setAnimationLoop(frame);
