@@ -157,8 +157,9 @@ function portrait(id) {
   try {
     const r = new T.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); r.setSize(160, 200); r.outputColorSpace = T.SRGBColorSpace;
     const sc = new T.Scene(); sc.add(new T.HemisphereLight('#f2f0e8', '#6a6050', 1.6)); const d = new T.DirectionalLight('#fff4e2', 2.2); d.position.set(1.5, 2, 3); sc.add(d);
-    const p = window.GOAPeople.create(id); p.mesh.rotation.y = 0.35; sc.add(p.mesh); p.pose({ speed: 0, mode: 'idle' }, 0.016);
-    const cam = new T.PerspectiveCamera(24, 0.8, 0.1, 20), h = p.avatar.height; cam.position.set(0, h * 0.82, 3.1); cam.lookAt(0, h * 0.72, 0);
+    const p = window.GOAPeople.create(id); p.mesh.rotation.y = 0.25; sc.add(p.mesh); p.pose({ speed: 0, mode: 'idle' }, 0.016);
+    p.mesh.updateMatrixWorld(true); const hp = p.bones.head.getWorldPosition(new T.Vector3()); // head-and-shoulders, so faces read
+    const cam = new T.PerspectiveCamera(24, 0.8, 0.05, 20); cam.position.set(hp.x + 0.12, hp.y + 0.02, hp.z + 1.25); cam.lookAt(hp.x, hp.y - 0.07, hp.z);
     r.render(sc, cam); portraits[id] = r.domElement.toDataURL('image/png'); r.dispose(); r.forceContextLoss?.();
   } catch (e) { portraits[id] = ''; }
   return portraits[id];

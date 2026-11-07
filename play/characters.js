@@ -9,19 +9,19 @@ const damp = (a, b, k, dt) => a + (b - a) * (1 - Math.exp(-k * dt));
 
 const AVATARS = [
   { id: 'hunter', name: 'Marcus Reed', role: 'Big-game hunter', bio: 'Patient on the stalk and steady on the shot. Knows every elk wallow in the high meadows.',
-    skin: '#5a3825', hair: '#141110', hairStyle: 'short', beard: true, hat: 'cap', hatCol: '#e2611c', shirt: '#6b6a3c', jacket: '#5f5e36', camo: true, vest: '#ef6a1d',
-    pants: '#7a6a4c', boots: '#3a2a1d', build: 'm', height: 1.82 },
+    skin: '#65412a', hair: '#141110', hairStyle: 'short', beard: true, beardCol: '#231b16', hat: 'cap', hatCol: '#e2611c', shirt: '#6b6a3c', jacket: '#5f5e36', camo: true, vest: '#ef6a1d',
+    pants: '#7a6a4c', boots: '#3a2a1d', eye: '#4a2e1c', age: 38, build: 'm', height: 1.82 },
   { id: 'ranger', name: 'Elena Vasquez', role: 'Park ranger', bio: 'Keeps the valley wild and the visitors safe. Knows the rules, the roads and where the bears den.',
-    skin: '#9a6a48', hair: '#2a1a12', hairStyle: 'bun', hat: 'ranger', hatCol: '#7d6a45', shirt: '#7b7b55', jacket: '#56603e', pants: '#3f4a33', boots: '#2b2219', build: 'f', height: 1.68 },
+    skin: '#9a6a48', hair: '#2a1a12', hairStyle: 'bun', hat: 'ranger', hatCol: '#7d6a45', shirt: '#7b7b55', jacket: '#56603e', pants: '#3f4a33', boots: '#2b2219', eye: '#5a3a1e', age: 34, build: 'f', height: 1.68 },
   { id: 'guide', name: 'Hank Doyle', role: 'Trail guide', bio: 'Forty seasons of trail rides and camp coffee. Tells a story for every switchback.',
     skin: '#d6a585', hair: '#b9b4ab', hairStyle: 'short', beard: true, beardCol: '#c9c4bb', hat: 'cowboy', hatCol: '#8b6a44', shirt: '#9b2f2a', plaid: true, jacket: null,
-    pants: '#3f5576', boots: '#5a3b24', build: 'm', height: 1.8 },
+    pants: '#3f5576', boots: '#5a3b24', eye: '#6f8494', age: 63, build: 'm', height: 1.8 },
   { id: 'camper', name: 'Aiyana Clearwater', role: 'Camp chef & outfitter', bio: 'Builds a fire in the rain and a feast from a cooler. Runs the best camp in the valley.',
-    skin: '#a9734f', hair: '#120e0c', hairStyle: 'braid', hat: 'beanie', hatCol: '#c9a13a', shirt: '#2f7a76', jacket: '#2b6c69', pants: '#a3926e', boots: '#4a3626', build: 'f', height: 1.65 },
+    skin: '#a9734f', hair: '#120e0c', hairStyle: 'braid', hat: 'beanie', hatCol: '#c9a13a', shirt: '#2f7a76', jacket: '#2b6c69', pants: '#a3926e', boots: '#4a3626', eye: '#3a2416', age: 29, build: 'f', height: 1.65 },
   { id: 'tracker', name: 'Jamal Okafor', role: 'Wildlife tracker', bio: 'Reads tracks like a newspaper. Can tell a buck from a doe by the print alone.',
-    skin: '#3f271a', hair: '#0e0b0a', hairStyle: 'crop', hat: 'none', shirt: '#4e5638', jacket: '#56603a', camo: true, pants: '#4d4a3a', boots: '#2b2016', build: 'm', height: 1.86 },
+    skin: '#4b2f20', hair: '#0e0b0a', hairStyle: 'crop', hat: 'none', shirt: '#4e5638', jacket: '#56603a', camo: true, pants: '#4d4a3a', boots: '#2b2016', eye: '#2f1d12', age: 31, build: 'm', height: 1.86 },
   { id: 'photographer', name: 'Mei Lin', role: 'Wildlife photographer', bio: 'Waits hours for the perfect light. Her journal photos hang in the ranger station.',
-    skin: '#e1b894', hair: '#1a1514', hairStyle: 'bob', hat: 'cap', hatCol: '#3d5a45', shirt: '#d9d2c2', jacket: '#b39a6f', pants: '#5b5d5a', boots: '#3b2f25', build: 'f', height: 1.62 },
+    skin: '#e1b894', hair: '#1a1514', hairStyle: 'bob', hat: 'cap', hatCol: '#3d5a45', shirt: '#d9d2c2', jacket: '#b39a6f', pants: '#5b5d5a', boots: '#3b2f25', eye: '#3b2a1c', age: 27, build: 'f', height: 1.62 },
 ];
 
 let T = null, mat = null;
@@ -58,13 +58,13 @@ function rig(av) {
 
 function buildGeometry(av, rg) {
   const C = (h) => new T.Color(h), parts = [], f = av.build === 'f', k = rg.k;
-  const add = (g, boneName, color, shade) => {
+  const add = (g, boneName, color, shade, matIndex = 0) => {
     g.scale(k, k, k);
-    if (g.index) { g.computeVertexNormals(); g = g.toNonIndexed(); }
-    g.deleteAttribute('uv');
+    if (g.index) { if (!matIndex) g.computeVertexNormals(); g = g.toNonIndexed(); }
+    if (!matIndex || !g.attributes.uv) { if (g.attributes.uv) g.deleteAttribute('uv'); g.setAttribute('uv', new T.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2)); }
     const n = g.attributes.position.count, col = new Float32Array(n * 3), base = C(color), tmp = new T.Color(), p = g.attributes.position;
     for (let i = 0; i < n; i++) { tmp.copy(base); if (shade) shade(tmp, p.getX(i) / k, p.getY(i) / k, p.getZ(i) / k); col[i * 3] = tmp.r; col[i * 3 + 1] = tmp.g; col[i * 3 + 2] = tmp.b; }
-    g.setAttribute('color', new T.BufferAttribute(col, 3)); parts.push({ g, bone: rg.bones[boneName] });
+    g.setAttribute('color', new T.BufferAttribute(col, 3)); parts.push({ g, bone: rg.bones[boneName], mat: matIndex });
   };
   const top = av.jacket || av.shirt, topShade = av.camo ? camoTone : av.plaid ? plaidTone : null;
   // torso: pelvis, belly, chest (tapered capsules)
@@ -77,21 +77,31 @@ function buildGeometry(av, rg) {
   if (av.id === 'camper' || av.id === 'photographer') add(new T.BoxGeometry(0.28, 0.36, 0.14).translate(0, 0.02, -0.17), 'chest', av.id === 'camper' ? '#53633c' : '#3a3d3f'); // backpack
   // neck and head
   add(new T.CylinderGeometry(0.048, 0.058, 0.12, 10).translate(0, 0.04, 0), 'neck', av.skin);
-  add(new T.SphereGeometry(0.105, 16, 12).scale(0.92, 1.08, 1).translate(0, 0.07, 0.005), 'head', av.skin);
-  add(new T.SphereGeometry(0.03, 8, 6).scale(1, 0.8, 1).translate(0, 0.05, 0.1), 'head', av.skin); // nose
+  // head: a sculpted sphere carrying the painted face texture (material 1)
+  const head = new T.SphereGeometry(0.105, 112, 80);
+  const dirs = head.attributes.position.array.slice(); // pre-sculpt directions, to find where the eyes sit
+  sculptHead(head, av);
+  head.scale(0.93, 1.03, 1).translate(0, 0.068, 0.005);
+  // eye centres: just behind the sculpted surface in each socket
+  const eyeAt = (sx) => { let bi = 0, bd = -2; const t = new T.Vector3(sx * 0.33, 0.13, 0.93).normalize(); for (let i = 0; i < dirs.length; i += 3) { const d = (dirs[i] * t.x + dirs[i + 1] * t.y + dirs[i + 2] * t.z) / 0.105; if (d > bd) { bd = d; bi = i / 3; } } const pp = head.attributes.position; return [pp.getX(bi), pp.getY(bi), pp.getZ(bi) - 0.0062]; };
+  const eyes = [eyeAt(1), eyeAt(-1)];
+  add(head, 'head', '#ffffff', null, 1);
+  // eyes: whites, coloured iris and pupil on a textured eyeball (material 2), lids above and below
   for (const sx of [1, -1]) {
-    add(new T.SphereGeometry(0.014, 6, 5).translate(sx * 0.035, 0.09, 0.093), 'head', '#1d1714');
-    add(new T.SphereGeometry(0.022, 6, 5).scale(0.5, 1, 0.8).translate(sx * 0.098, 0.07, 0), 'head', av.skin);
+    const [ex, ey, ez] = eyes[sx > 0 ? 0 : 1];
+    add(new T.SphereGeometry(0.0125, 20, 14).rotateY(sx * 0.12).translate(ex, ey, ez), 'head', '#ffffff', null, 2);
+    add(new T.SphereGeometry(0.0138, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.36).rotateX(0.32).translate(ex, ey + 0.0008, ez), 'head', av.skin,
+      (c, x, y, z) => { if (z > ez + 0.004 && y < ey + 0.007) c.lerp(new T.Color('#1a1210'), 0.75); else c.multiplyScalar(0.94); });
+    add(new T.SphereGeometry(0.0133, 16, 6, 0, Math.PI * 2, Math.PI * 0.76, Math.PI * 0.24).rotateX(-0.2).translate(ex, ey - 0.0004, ez), 'head', av.skin, (c) => c.multiplyScalar(0.9));
+    add(new T.SphereGeometry(0.022, 10, 8).scale(0.45, 1, 0.75).rotateY(sx * 0.25).translate(sx * 0.096, 0.068, 0.0), 'head', av.skin, (c, x, y, z) => { if (Math.abs(x) < 0.097) c.multiplyScalar(0.8); });
   }
-  if (av.beard) add(new T.SphereGeometry(0.1, 12, 8).scale(0.86, 0.75, 0.9).translate(0, 0.0, 0.025), 'head', av.beardCol || av.hair,
-    (c, x, y, z) => { if (y > 0.035 || z < 0) c.set(av.skin); });
   // hair
   // hair: a cap over the crown plus the back of the head (three.js spheres put -z at phi between PI and 2*PI)
   add(new T.SphereGeometry(0.112, 16, 8, 0, Math.PI * 2, 0, Math.PI * (av.hairStyle === 'crop' ? 0.3 : 0.36)).scale(0.95, 1.05, 1.03).translate(0, 0.078, -0.006), 'head', av.hair);
   if (av.hairStyle !== 'crop') add(new T.SphereGeometry(0.114, 14, 10, Math.PI * 1.08, Math.PI * 0.84, 0.2, Math.PI * 0.55).scale(0.95, 1.05, 1.03).translate(0, 0.072, -0.006), 'head', av.hair);
   if (av.hairStyle === 'bun') add(new T.SphereGeometry(0.05, 10, 8).translate(0, 0.1, -0.11), 'head', av.hair);
   if (av.hairStyle === 'braid') add(new T.CapsuleGeometry(0.03, 0.3, 4, 8).translate(0, -0.1, -0.1), 'head', av.hair);
-  if (av.hairStyle === 'bob') add(new T.SphereGeometry(0.118, 14, 10, 0, Math.PI * 2, 0.4, Math.PI * 0.42).scale(1.02, 1.05, 1.02).translate(0, 0.07, -0.01), 'head', av.hair);
+  if (av.hairStyle === 'bob') add(new T.SphereGeometry(0.118, 18, 10, Math.PI * 0.8, Math.PI * 1.4, 0.4, Math.PI * 0.42).scale(1.02, 1.05, 1.02).translate(0, 0.07, -0.01), 'head', av.hair);
   // hats
   if (av.hat === 'cap') {
     add(new T.SphereGeometry(0.114, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.45).translate(0, 0.09, 0), 'head', av.hatCol);
@@ -102,7 +112,7 @@ function buildGeometry(av, rg) {
     add(new T.CylinderGeometry(cow ? 0.085 : 0.095, 0.112, cow ? 0.12 : 0.1, 16).translate(0, 0.2, 0), 'head', av.hatCol);
     add(new T.CylinderGeometry(0.113, 0.113, 0.022, 16).translate(0, 0.16, 0), 'head', cow ? '#3b2a1c' : '#4d3d24');
   } else if (av.hat === 'beanie') {
-    add(new T.SphereGeometry(0.118, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.52).scale(1, 1.15, 1).translate(0, 0.08, 0), 'head', av.hatCol);
+    add(new T.SphereGeometry(0.118, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.4).scale(1, 1.15, 1.02).translate(0, 0.098, -0.004), 'head', av.hatCol);
     add(new T.SphereGeometry(0.03, 8, 6).translate(0, 0.215, 0), 'head', av.hatCol);
   }
   // arms and hands
@@ -116,14 +126,19 @@ function buildGeometry(av, rg) {
     add(new T.BoxGeometry(0.1, 0.07, 0.24).translate(0, -0.02, 0.05), 'foot' + s, av.boots, (c, x, y) => { if (y < -0.04) c.multiplyScalar(0.55); });
   }
   rg.root.updateMatrixWorld(true);
-  const pos = [], nor = [], col = [], si = [], sw = [];
-  for (const { g, bone } of parts) {
+  const pos = [], nor = [], col = [], uv = [], si = [], sw = [], groups = [];
+  parts.sort((a, b) => a.mat - b.mat);
+  for (const { g, bone, mat: m } of parts) {
     g.applyMatrix4(bone.matrixWorld);
-    const bi = rg.list.indexOf(bone), n = g.attributes.position.count;
-    pos.push(...g.attributes.position.array); nor.push(...g.attributes.normal.array); col.push(...g.attributes.color.array);
+    const bi = rg.list.indexOf(bone), n = g.attributes.position.count, start = pos.length / 3;
+    const app = (dst, src) => { for (let i = 0; i < src.length; i++) dst.push(src[i]); }; // no spread: big heads overflow the call stack
+    app(pos, g.attributes.position.array); app(nor, g.attributes.normal.array); app(col, g.attributes.color.array); app(uv, g.attributes.uv.array);
     for (let i = 0; i < n; i++) { si.push(bi, 0, 0, 0); sw.push(1, 0, 0, 0); }
+    const last = groups[groups.length - 1]; if (last && last.m === m) last.count += n; else groups.push({ start, count: n, m });
   }
   const geo = new T.BufferGeometry();
+  for (const gr of groups) geo.addGroup(gr.start, gr.count, gr.m);
+  geo.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
   geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
   geo.setAttribute('normal', new T.Float32BufferAttribute(nor, 3));
   geo.setAttribute('color', new T.Float32BufferAttribute(col, 3));
@@ -133,6 +148,139 @@ function buildGeometry(av, rg) {
   return geo;
 }
 
+
+// ------------------------------------------------------------------ faces
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const gauss = (dx, dy, r) => Math.exp(-(dx * dx + dy * dy) / (r * r));
+/** Shape a unit-ish sphere into a head: narrower jaw, a chin, brow ridge, cheekbones, eye sockets and a fuller back. */
+function sculptHead(g, av) {
+  const p = g.attributes.position, R = 0.105, f = av.build === 'f', beard = !!av.beard;
+  for (let i = 0; i < p.count; i++) {
+    let x = p.getX(i) / R, y = p.getY(i) / R, z = p.getZ(i) / R;
+    const front = smooth(0.1, 0.8, z);
+    if (y < -0.25) { const t = (-y - 0.25) / 0.75; x *= 1 - (f ? 0.22 : 0.13) * t * t; z *= 1 - 0.08 * t * (1 - front); }   // jaw taper
+    if (!f && y < -0.2) x *= 1 + 0.06 * gauss(0, y + 0.55, 0.25);                                                          // a squarer jaw
+    z += front * gauss(x, y + 0.75, 0.26) * (f ? 0.035 : 0.05);                                                           // chin
+    z += front * gauss(x * 0.6, y - 0.24, 0.12) * 0.045;                                                                   // brow ridge
+    for (const sx of [1, -1]) {
+      z -= front * gauss(x - sx * 0.33, y - 0.13, 0.16) * 0.05;                                                            // eye sockets
+      z += front * gauss(x - sx * 0.5, y + 0.07, 0.2) * 0.035;                                                             // cheekbones
+    }
+    z += front * gauss(x, y + 0.42, 0.2) * 0.02;                                                                           // muzzle around the mouth
+    { // nose: a bridge from the brow that widens and projects to a rounded tip, with nostril wings
+      const ny = clamp((0.12 - y) / 0.42, 0, 1), on = smooth(-0.36, -0.26, y) * smooth(0.16, 0.06, y);
+      const w = (f ? 0.055 : 0.065) + 0.06 * ny * ny, h = (0.03 + 0.13 * Math.pow(ny, 1.6)) * (f ? 0.85 : 1);
+      z += front * on * h * Math.exp(-(x * x) / (w * w));
+      for (const sx of [1, -1]) z += front * gauss((x - sx * 0.1) * 1.4, y + 0.27, 0.07) * 0.035;
+    }
+    if (beard) { const b = front * smooth(0.0, -0.45, y) * (1 - gauss(x, y + 0.42, 0.12) * 0.6); x *= 1 + b * 0.05; y -= b * 0.03; z += b * 0.06; }
+    if (z < 0) z *= 1.06;                                                                                                   // back of the skull
+    x *= 0.95;
+    p.setXYZ(i, x * R, y * R, z * R);
+  }
+  g.computeVertexNormals();
+}
+/** Canvas pixel for a head direction (the sphere's own UV layout: face at u = 0.25). */
+function toUV(W, H, x, y, z) {
+  const l = Math.hypot(x, y, z); x /= l; y /= l; z /= l;
+  let phi = Math.atan2(z, -x); if (phi < 0) phi += Math.PI * 2;
+  return [phi / (Math.PI * 2) * W, Math.acos(clamp(y, -1, 1)) / Math.PI * H];
+}
+function hexRGB(h) { const c = new T.Color(h); return [c.r * 255, c.g * 255, c.b * 255]; }
+function mixHex(a, b, t) { const A = hexRGB(a), B = hexRGB(b); return `rgb(${A.map((v, i) => Math.round(v + (B[i] - v) * t)).join(',')})`; }
+function paintFace(av) {
+  const W = 1024, H = 512, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+  const skin = av.skin, light = new T.Color(skin).getHSL({}).l, f = av.build === 'f';
+  const P = (x, y, z) => toUV(W, H, x, y, z);
+  // base tone with a soft gradient: warmer cheeks and nose, cooler temples and jaw
+  g.fillStyle = skin; g.fillRect(0, 0, W, H);
+  const shade = light < 0.3 ? 0.5 : 1; // deep skin tones get lighter shading passes so features stay readable
+  let gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, `rgba(0,0,0,${0.1 * shade})`); gr.addColorStop(0.45, 'rgba(0,0,0,0)'); gr.addColorStop(0.8, `rgba(0,0,0,${0.12 * shade})`); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  if (light < 0.3) { const sh = g.createRadialGradient(W * 0.25, H * 0.42, 10, W * 0.25, H * 0.42, 150); sh.addColorStop(0, 'rgba(255,220,190,0.10)'); sh.addColorStop(1, 'rgba(255,220,190,0)'); g.fillStyle = sh; g.fillRect(0, 0, W, H); }
+  // pores and tone variation
+  let seed = av.id.length * 977; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 9000; i++) { const x = rnd() * W, y = rnd() * H, r = 0.6 + rnd() * 1.8; g.fillStyle = rnd() < 0.5 ? `rgba(0,0,0,${0.03 + rnd() * 0.04})` : `rgba(255,235,220,${0.02 + rnd() * 0.03})`; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); }
+  const blob = (x, y, rx, ry, color) => { const rg = g.createRadialGradient(x, y, 0, x, y, Math.max(rx, ry)); rg.addColorStop(0, color); rg.addColorStop(1, 'rgba(0,0,0,0)'); g.save(); g.translate(x, y); g.scale(rx / Math.max(rx, ry), ry / Math.max(rx, ry)); g.translate(-x, -y); g.fillStyle = rg; g.beginPath(); g.arc(x, y, Math.max(rx, ry), 0, 7); g.fill(); g.restore(); };
+  const warm = light > 0.55 ? 'rgba(210,90,80,0.22)' : light > 0.35 ? 'rgba(170,70,55,0.18)' : 'rgba(120,40,30,0.18)';
+  for (const sx of [1, -1]) {
+    let [cx, cy] = P(sx * 0.5, -0.12, 0.85); blob(cx, cy, 46, 34, warm);                      // cheeks
+    [cx, cy] = P(sx * 0.33, 0.13, 0.93); blob(cx, cy, 34, 22, `rgba(40,20,15,${0.32 * shade})`);         // eye socket shadow
+    [cx, cy] = P(sx * 0.82, 0.0, 0.55); blob(cx, cy, 40, 60, 'rgba(0,0,0,0.10)');            // temple / side shade
+  }
+  let [nx, ny] = P(0, -0.05, 1); blob(nx, ny, 16, 40, 'rgba(255,240,225,0.18)');               // nose bridge highlight
+  for (const sx of [1, -1]) { const [ax, ay] = P(sx * 0.1, -0.12, 1); blob(ax, ay, 9, 30, 'rgba(40,20,10,0.22)'); }   // nose sides
+  let [tx, ty] = P(0, -0.24, 1); blob(tx, ty, 26, 14, warm);                                     // nose tip warmth
+  for (const sx of [1, -1]) { const [ax, ay] = P(sx * 0.065, -0.29, 1); blob(ax, ay, 6, 4, 'rgba(30,12,8,0.6)'); }      // nostrils
+  // brows
+  g.strokeStyle = av.hair; g.lineCap = 'round';
+  for (const sx of [1, -1]) {
+    for (let h = 0; h < 26; h++) {
+      const t = h / 25, bx = sx * (0.14 + t * 0.32), by = 0.27 + Math.sin(t * Math.PI) * 0.05 - t * 0.03;
+      const [x1, y1] = P(bx, by, 0.93), [x2, y2] = P(bx + sx * 0.03, by + 0.02, 0.93);
+      g.globalAlpha = 0.55; g.lineWidth = f ? 2.2 : 3.4 - t; g.beginPath(); g.moveTo(x1, y1 + (rnd() - 0.5) * 3); g.lineTo(x2, y2 + (rnd() - 0.5) * 3); g.stroke();
+    }
+  }
+  g.globalAlpha = 1;
+  // lips: shaped upper and lower lip with a darker parting line
+  const lipCol = mixHex(skin, light > 0.5 ? '#b5525a' : '#6e2f2c', light > 0.5 ? 0.5 : 0.45);
+  const [mx, my] = P(0, -0.42, 0.9); const lw = f ? 34 : 38;
+  g.fillStyle = lipCol;
+  g.beginPath(); g.moveTo(mx - lw, my); g.quadraticCurveTo(mx - lw * 0.4, my - 12, mx - 4, my - 9); g.lineTo(mx, my - 7); g.lineTo(mx + 4, my - 9); g.quadraticCurveTo(mx + lw * 0.4, my - 12, mx + lw, my); g.closePath(); g.fill();
+  g.fillStyle = mixHex(skin, light > 0.5 ? '#c2646a' : '#7a3a36', f ? 0.55 : 0.4);
+  g.beginPath(); g.moveTo(mx - lw * 0.92, my + 1); g.quadraticCurveTo(mx, my + (f ? 20 : 16), mx + lw * 0.92, my + 1); g.closePath(); g.fill();
+  g.strokeStyle = 'rgba(30,10,8,0.65)'; g.lineWidth = 2; g.beginPath(); g.moveTo(mx - lw, my); g.quadraticCurveTo(mx, my + 3, mx + lw, my); g.stroke();
+  blob(mx, my + 14, 20, 6, 'rgba(255,240,230,0.12)');
+  // smile lines, and more of them with age
+  g.strokeStyle = `rgba(40,20,12,${0.12 + av.age / 400})`; g.lineWidth = 2;
+  for (const sx of [1, -1]) { const [a1, b1] = P(sx * 0.17, -0.2, 0.96), [a2, b2] = P(sx * 0.26, -0.47, 0.9); g.beginPath(); g.moveTo(a1, b1); g.quadraticCurveTo(a1 + sx * 14, (b1 + b2) / 2, a2, b2); g.stroke(); }
+  if (av.age > 50) {
+    g.strokeStyle = 'rgba(50,25,15,0.28)'; g.lineWidth = 1.6;
+    for (let i = 0; i < 3; i++) { const [a1, b1] = P(-0.3, 0.44 + i * 0.07, 0.86), [a2, b2] = P(0.3, 0.44 + i * 0.07, 0.86); g.beginPath(); g.moveTo(a1, b1); g.quadraticCurveTo((a1 + a2) / 2, b1 - 5, a2, b2); g.stroke(); }
+    for (const sx of [1, -1]) for (let i = 0; i < 3; i++) { const [a1, b1] = P(sx * 0.48, 0.12 + (i - 1) * 0.05, 0.85), [a2, b2] = P(sx * 0.6, 0.12 + (i - 1) * 0.08, 0.78); g.beginPath(); g.moveTo(a1, b1); g.lineTo(a2, b2); g.stroke(); }
+  }
+  // beard and moustache, painted hair by hair over the jaw, chin and upper lip
+  if (av.beard) {
+    const bc = av.beardCol || av.hair;
+    g.strokeStyle = bc; g.lineCap = 'round';
+    for (let i = 0; i < 26000; i++) {
+      const x = (rnd() - 0.5) * 2, y = -0.25 - rnd() * 0.85, z = Math.sqrt(Math.max(0, 1 - x * x - y * y)); if (z < 0.05) continue;
+      const lipGap = Math.abs(y + 0.42) < 0.05 && Math.abs(x) < 0.17;
+      const mous = y > -0.4 && y < -0.3 && Math.abs(x) < 0.24, jaw = y < -0.36 || Math.abs(x) > 0.55;
+      if (lipGap || !(mous || jaw)) continue;
+      const [px, py] = P(x, y, z); g.globalAlpha = 0.18 + rnd() * 0.3; g.lineWidth = 1.2 + rnd();
+      g.beginPath(); g.moveTo(px, py); g.lineTo(px + (rnd() - 0.5) * 3, py + 3 + rnd() * 4); g.stroke();
+    }
+    g.globalAlpha = 1;
+  } else if (av.build === 'm') { // a shadow of stubble
+    for (let i = 0; i < 5000; i++) { const x = (rnd() - 0.5) * 1.6, y = -0.3 - rnd() * 0.7, z = Math.sqrt(Math.max(0, 1 - x * x - y * y)); if (z < 0.1 || (Math.abs(y + 0.42) < 0.05 && Math.abs(x) < 0.17)) continue; const [px, py] = P(x, y, z); g.fillStyle = `rgba(20,14,10,${0.12 + rnd() * 0.12})`; g.fillRect(px, py, 1.4, 1.4); }
+  }
+  // hairline: a soft fade into the hair colour at the top and back
+  gr = g.createLinearGradient(0, 0, 0, H * 0.3); gr.addColorStop(0, av.hair); gr.addColorStop(0.75, av.hair); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  g.globalAlpha = 0.85; g.fillStyle = gr; g.fillRect(0, 0, W, H * 0.3); g.globalAlpha = 1;
+  const tex = new T.CanvasTexture(c); tex.colorSpace = T.SRGBColorSpace; tex.anisotropy = 4; return tex;
+}
+function paintEye(av) {
+  const W = 256, H = 128, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+  g.fillStyle = '#ece6df'; g.fillRect(0, 0, W, H);
+  const cx = W * 0.25, cy = H * 0.5;
+  const rg = g.createRadialGradient(cx, cy, 2, cx, cy, 64); rg.addColorStop(0, 'rgba(0,0,0,0)'); rg.addColorStop(0.7, 'rgba(0,0,0,0)'); rg.addColorStop(1, 'rgba(190,120,110,0.35)'); g.fillStyle = rg; g.fillRect(0, 0, W, H);
+  const iris = g.createRadialGradient(cx, cy, 3, cx, cy, 17); iris.addColorStop(0, av.eye); iris.addColorStop(0.75, av.eye); iris.addColorStop(1, '#141010');
+  g.fillStyle = iris; g.beginPath(); g.ellipse(cx, cy, 17, 17, 0, 0, 7); g.fill();
+  g.strokeStyle = 'rgba(255,255,255,0.12)'; for (let a = 0; a < 40; a++) { const t = a / 40 * 6.283; g.beginPath(); g.moveTo(cx + Math.cos(t) * 7, cy + Math.sin(t) * 7); g.lineTo(cx + Math.cos(t) * 15, cy + Math.sin(t) * 15); g.stroke(); }
+  g.fillStyle = '#060404'; g.beginPath(); g.arc(cx, cy, 7, 0, 7); g.fill();
+  g.fillStyle = 'rgba(255,255,255,0.9)'; g.beginPath(); g.arc(cx - 5, cy - 5, 3, 0, 7); g.fill();
+  const tex = new T.CanvasTexture(c); tex.colorSpace = T.SRGBColorSpace; return tex;
+}
+
+const faceMats = new Map();
+function materials(av) {
+  if (faceMats.has(av.id)) return faceMats.get(av.id);
+  const body = material();
+  const face = new T.MeshStandardMaterial({ map: paintFace(av), roughness: 0.62, metalness: 0 });
+  face.onBeforeCompile = body.onBeforeCompile; face.customProgramCacheKey = () => 'goa-people-face';
+  const eye = new T.MeshStandardMaterial({ map: paintEye(av), roughness: 0.18, metalness: 0 });
+  const set = [body, face, eye]; faceMats.set(av.id, set); return set;
+}
 function material() {
   if (mat) return mat;
   mat = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0 });
@@ -147,7 +295,7 @@ function create(id) {
   const av = AVATARS.find((a) => a.id === id) || AVATARS[0];
   const rg = rig(av);
   if (!geoCache.has(av.id)) geoCache.set(av.id, buildGeometry(av, rig(av)));
-  const mesh = new T.SkinnedMesh(geoCache.get(av.id), material());
+  const mesh = new T.SkinnedMesh(geoCache.get(av.id), materials(av));
   mesh.add(rg.root); mesh.updateMatrixWorld(true); mesh.bind(new T.Skeleton(rg.list));
   mesh.castShadow = true; mesh.receiveShadow = true; mesh.name = 'person-' + av.id;
   const b = rg.bones;
