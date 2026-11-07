@@ -160,7 +160,9 @@ function portrait(id) {
     const p = window.GOAPeople.create(id); p.mesh.rotation.y = 0.25; sc.add(p.mesh); p.pose({ speed: 0, mode: 'idle' }, 0.016);
     p.mesh.updateMatrixWorld(true); const hp = p.bones.head.getWorldPosition(new T.Vector3()); // head-and-shoulders, so faces read
     const cam = new T.PerspectiveCamera(24, 0.8, 0.05, 20); cam.position.set(hp.x + 0.12, hp.y + 0.02, hp.z + 1.25); cam.lookAt(hp.x, hp.y - 0.07, hp.z);
-    r.render(sc, cam); portraits[id] = r.domElement.toDataURL('image/png'); r.dispose(); r.forceContextLoss?.();
+    r.render(sc, cam); const url = r.domElement.toDataURL('image/png'); r.dispose(); r.forceContextLoss?.();
+    if (window.GOAPeople.usesModel?.(id) && !p.modelReady) return url; // body still loading: draw again next time
+    portraits[id] = url;
   } catch (e) { portraits[id] = ''; }
   return portraits[id];
 }

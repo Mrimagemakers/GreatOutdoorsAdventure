@@ -17,7 +17,7 @@ try { avatarId = localStorage.getItem(AVATAR_KEY) || 'hunter'; } catch (e) { /* 
 // ------------------------------------------------------------------ inventory
 const inv = {
   weapons: [], ammo: { rifle: 0, shotgun: 0, handgun: 0 }, ammoType: {}, mags: {},
-  tools: new Set(['knife', 'rod']), food: { rawMeat: 0, cookedMeat: 0, rawFish: 0, cookedFish: 0, berries: 0 }, wood: 0, water: 0, trophies: [],
+  tools: new Set(['knife', 'rod', 'hatchet']), food: { rawMeat: 0, cookedMeat: 0, rawFish: 0, cookedFish: 0, berries: 0 }, wood: 0, water: 0, trophies: [],
 };
 const TOOL_INFO = {
   knife: { name: 'Hunting knife', hint: 'Tag harvests and fend off attacks up close' },
@@ -29,7 +29,7 @@ const TOOL_INFO = {
   compass: { name: 'Compass', hint: 'Shows your heading and the next marker' },
   map: { name: 'Trail map', hint: 'Marks supply caches on the map' },
 };
-function slots() { return [...inv.weapons, ...(inv.tools.has('rod') ? ['rod'] : []), 'knife']; }
+function slots() { return [...inv.weapons, ...(inv.tools.has('rod') ? ['rod'] : []), ...(inv.tools.has('hatchet') ? ['hatchet'] : []), 'knife']; }
 function current() { const s = slots(); return s[clamp(P.slot, 0, s.length - 1)]; }
 function wStats(id) { return window.GOAWeapons.stats(id, inv.ammoType[id]); }
 
@@ -59,7 +59,30 @@ function equip() {
   if (window.GOAWeapons.STATS[id]) { weaponObj = window.GOAWeapons.build(id); if (inv.mags[id] === undefined) inv.mags[id] = 0; P.mag = inv.mags[id]; }
   else if (id === 'rod') weaponObj = window.GOAFishing?.rodModel?.() || null;
   else if (id === 'knife') weaponObj = knifeModel();
+  else if (id === 'hatchet') weaponObj = hatchetModel();
   person.attach(weaponObj); hud();
+}
+/* The hatchet is a textured model (from the lumberjack pack). It loads once; each equip gets a copy, lined up so the
+   handle sits in the holder and the head points out along +z like the other held items. */
+let hatchetSrc = null;
+function hatchetModel() {
+  const g = new T.Group(); g.userData = { muzzle: 0.45 };
+  if (!hatchetSrc) hatchetSrc = new Promise((res) => new T.GLTFLoader().load('assets/tools/hatchet.glb', (gl) => {
+    const m = gl.scene; m.updateMatrixWorld(true);
+    const box = new T.Box3().setFromObject(m), size = box.getSize(new T.Vector3()), c = box.getCenter(new T.Vector3());
+    const ax = size.x >= size.y && size.x >= size.z ? 'x' : size.y >= size.z ? 'y' : 'z';
+    // the head is the wider end of the long axis
+    let wideHi = 0, wideLo = 0; const v = new T.Vector3();
+    m.traverse((o) => { if (!o.isMesh) return; const p = o.geometry.attributes.position; for (let i = 0; i < p.count; i += 3) { v.fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld); const t = v[ax] - c[ax], w = ax === 'x' ? Math.abs(v.y - c.y) + Math.abs(v.z - c.z) : ax === 'y' ? Math.abs(v.x - c.x) + Math.abs(v.z - c.z) : Math.abs(v.x - c.x) + Math.abs(v.y - c.y); if (t > size[ax] * 0.3) wideHi = Math.max(wideHi, w); if (t < -size[ax] * 0.3) wideLo = Math.max(wideLo, w); } });
+    const piv = new T.Group(); m.position.sub(c); piv.add(m);
+    const dir = new T.Vector3(ax === 'x' ? 1 : 0, ax === 'y' ? 1 : 0, ax === 'z' ? 1 : 0).multiplyScalar(wideHi >= wideLo ? 1 : -1);
+    piv.quaternion.setFromUnitVectors(dir, new T.Vector3(0, 0, 1));
+    const out = new T.Group(); out.add(piv); const k = 0.42 / size[ax]; out.scale.setScalar(k); out.position.z = 0.21 - 0.06;
+    m.traverse((o) => { if (o.isMesh) { o.castShadow = true; } });
+    res(out);
+  }, undefined, () => res(null)));
+  hatchetSrc.then((src) => { if (src) g.add(src.clone(true)); else g.add(knifeModel()); });
+  return g;
 }
 function knifeModel() {
   const g = new T.Group(), steel = new T.MeshStandardMaterial({ color: '#c9ccd0', metalness: 0.9, roughness: 0.3 }), handle = new T.MeshStandardMaterial({ color: '#4a2f1f', roughness: 0.7 });
@@ -184,7 +207,7 @@ const _ray = { o: null, d: null };
 function fire(rayO, rayD) {
   const id = current();
   if (id === 'rod') { window.GOAFishing?.use?.(); return; }
-  if (id === 'knife') { melee(); return; }
+  if (id === 'knife' || id === 'hatchet') { melee(id); return; }
   const st = wStats(id); if (!st || P.reloadT > 0 || P.fireT > 0) return;
   if ((inv.mags[id] || 0) <= 0) { sound('click'); if (inv.ammo[st.family] > 0) reload(); else api.toast('Out of ammunition'); return; }
   inv.mags[id]--; P.mag = inv.mags[id]; P.fireT = st.fire; P.kick = 1; person?.kick();
@@ -213,14 +236,15 @@ function terrainBlock(o, d, range) { // march along the shot until the ground ge
   for (let t = 2; t < range * 1.2; t += 1.5) { const x = o.x + d.x * t, y = o.y + d.y * t, z = o.z + d.z * t; if (api.groundY(x, z) > y) return t; }
   return range * 1.2;
 }
-function melee() {
-  if (P.fireT > 0) return; P.fireT = 0.6; P.swingT = 0.35;
+function melee(kind = 'knife') {
+  if (P.fireT > 0) return; P.fireT = kind === 'hatchet' ? 0.75 : 0.6; P.swingT = 0.35;
   const down = window.GOAWildlife?.nearestDown?.(P.x, P.z, 2.8); if (down) { tagAnimal(down); return; }
+  if (kind === 'hatchet' && window.GOASurvival?.chop?.(P.x, P.z, P.yaw)) return;
   const fx = Math.sin(P.yaw), fz = Math.cos(P.yaw);
   for (const a of window.GOAWildlife?.animals || []) {
     if (a.gone || a.state === 'down') continue;
     const dx = a.x - P.x, dz = a.z - P.z, d = Math.hypot(dx, dz);
-    if (d < 2.6 && (dx * fx + dz * fz) / Math.max(d, 0.01) > 0.3) { window.GOAWildlife.hit(a, 34, 'body', P.x, P.z); if (a.state !== 'down') { a.state = 'flee'; a.strikes = 3; } hitMarker(false); api.toast(`You drive off the ${a.spec.name.toLowerCase()}`); return; }
+    if (d < 2.6 && (dx * fx + dz * fz) / Math.max(d, 0.01) > 0.3) { window.GOAWildlife.hit(a, kind === 'hatchet' ? 52 : 34, 'body', P.x, P.z); if (a.state !== 'down') { a.state = 'flee'; a.strikes = 3; } hitMarker(false); api.toast(`You drive off the ${a.spec.name.toLowerCase()}`); return; }
   }
 }
 let flash = null;
@@ -256,7 +280,7 @@ function hud() {
   const name = st ? (window.GOAExtension?.weaponName?.(id) || id) : TOOL_INFO[id]?.name || id;
   el['fh-wname'].textContent = name;
   el['fh-ammo'].textContent = st ? `${inv.mags[id] || 0} / ${st.mag}  ·  ${inv.ammo[st.family]} spare` : id === 'rod' ? (window.GOAFishing?.status?.() || '') : '';
-  el['fh-tip'].textContent = st ? 'Right mouse aim · Left click fire · R reload · Tab switch' : id === 'rod' ? 'Face water · Left click cast, click on the bite, hold to reel' : 'Left click: tag a harvest or fend off an attack · Tab switch';
+  el['fh-tip'].textContent = st ? 'Right mouse aim · Left click fire · R reload · Tab switch' : id === 'rod' ? 'Face water · Left click cast, click on the bite, hold to reel' : id === 'hatchet' ? 'Left click: chop deadfall for firewood, tag a harvest or fend off an attack · Tab switch' : 'Left click: tag a harvest or fend off an attack · Tab switch';
   el['fh-hp'].style.width = P.health + '%'; el['fh-st'].style.width = P.stamina * 100 + '%';
 }
 

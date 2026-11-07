@@ -301,7 +301,14 @@ function init(hooks) {
   (window.GOAJournalSections = window.GOAJournalSections || []).push(survivalSection);
 }
 
-window.GOASurvival = { init, frame, active: () => SV.on && !SV.dead && !SV.won, isNight, onDeath, eat(n) { SV.hunger = Math.min(100, SV.hunger + n); }, warm() { SV.warmth = Math.min(100, SV.warmth + 25); api.toast('You warm your hands by the fire'); },
+/** A hatchet swing near deadfall chops it for firewood. Returns true when it hit wood. */
+function chop(x, z, yaw) {
+  if (!SV.on) return false;
+  const fx = Math.sin(yaw), fz = Math.cos(yaw);
+  const w = SV.wood.find((q) => { const dx = q.x - x, dz = q.z - z, d = Math.hypot(dx, dz); return d < 2.8 && (dx * fx + dz * fz) / Math.max(d, 0.01) > 0.2; });
+  if (!w) return false; gatherWood(w); return true;
+}
+window.GOASurvival = { init, frame, chop, active: () => SV.on && !SV.dead && !SV.won, isNight, onDeath, eat(n) { SV.hunger = Math.min(100, SV.hunger + n); }, warm() { SV.warmth = Math.min(100, SV.warmth + 25); api.toast('You warm your hands by the fire'); },
   sleep, speedFactor, noVehicle: () => SV.on, onHarvest() {}, state: SV };
 window.GOAModes = { start, current: () => mode, onCatch };
 })();

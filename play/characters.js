@@ -56,9 +56,10 @@ function rig(av) {
   return { bones, list, root, k };
 }
 
-function buildGeometry(av, rg) {
+function buildGeometry(av, rg, only, neck = 1) {
   const C = (h) => new T.Color(h), parts = [], f = av.build === 'f', k = rg.k;
   const add = (g, boneName, color, shade, matIndex = 0) => {
+    if (only && !only.has(boneName)) return;
     g.scale(k, k, k);
     if (g.index) { if (!matIndex) g.computeVertexNormals(); g = g.toNonIndexed(); }
     if (!matIndex || !g.attributes.uv) { if (g.attributes.uv) g.deleteAttribute('uv'); g.setAttribute('uv', new T.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2)); }
@@ -76,7 +77,7 @@ function buildGeometry(av, rg) {
   }
   if (av.id === 'camper' || av.id === 'photographer') add(new T.BoxGeometry(0.28, 0.36, 0.14).translate(0, 0.02, -0.17), 'chest', av.id === 'camper' ? '#53633c' : '#3a3d3f'); // backpack
   // neck and head
-  add(new T.CylinderGeometry(0.048, 0.058, 0.12, 10).translate(0, 0.04, 0), 'neck', av.skin);
+  add(neck === 1 ? new T.CylinderGeometry(0.048, 0.058, 0.12, 10).translate(0, 0.04, 0) : new T.CylinderGeometry(0.048 * neck, 0.058 * neck, 0.2, 14).translate(0, 0.0, 0), 'neck', av.skin);
   // head: a sculpted sphere carrying the painted face texture (material 1)
   const head = new T.SphereGeometry(0.105, 112, 80);
   const dirs = head.attributes.position.array.slice(); // pre-sculpt directions, to find where the eyes sit
@@ -289,15 +290,205 @@ function material() {
   return mat;
 }
 
+// ------------------------------------------------------------------ full-body models
+/* The men stand on rigged, sculpted bodies: the outdoorsman body (from the lumberjack model) for Marcus and Hank, and
+   the lean body (from the Blake model) for Jamal. Each keeps his own painted head and face, his own colours and the
+   same poses: our small rig is posed as before and its rotations are copied onto the model's skeleton every frame.
+   The women keep their built bodies. Until a model has loaded, the built body shows. */
+const SIDES = [['L', 'l', 'L'], ['R', 'r', 'R']];
+const MODELS = {
+  outdoorsman: {
+    url: 'assets/characters/outdoorsman.glb', armOut: 0.24, headScale: 1.08, neck: 1.5, curl: 0.42, hide: ['neck_02'], textured: true,
+    map: Object.assign({ hips: 'pelvis', spine: 'spine_02', chest: 'spine_04', neck: 'neck_01', head: 'head' },
+      ...SIDES.map(([o, t]) => ({ ['upperArm' + o]: 'upperarm_' + t, ['foreArm' + o]: 'lowerarm_' + t, ['hand' + o]: 'hand_' + t, ['thigh' + o]: 'thigh_' + t, ['shin' + o]: 'calf_' + t, ['foot' + o]: 'foot_' + t }))),
+  },
+  lean: {
+    url: 'assets/characters/lean-body.glb', armOut: 0.12, headScale: 1.0, neck: 1, curl: 0.15, hide: ['head'], textured: false,
+    map: Object.assign({ hips: 'hips', spine: 'Spine', chest: 'chest', neck: 'neck', head: 'head' },
+      ...SIDES.map(([o, , t]) => ({ ['upperArm' + o]: 'upper_arm_' + t, ['foreArm' + o]: 'lower_arm_' + t, ['hand' + o]: 'hand_' + t, ['thigh' + o]: 'upper_leg_' + t, ['shin' + o]: 'lower_leg_' + t, ['foot' + o]: 'foot_' + t }))),
+  },
+};
+const BODY = { hunter: 'outdoorsman', guide: 'outdoorsman', tracker: 'lean' };
+const ORDER = ['hips', 'spine', 'chest', 'neck', 'head', 'upperArmL', 'foreArmL', 'handL', 'upperArmR', 'foreArmR', 'handR', 'thighL', 'shinL', 'footL', 'thighR', 'shinR', 'footR'];
+const sources = new Map(), loaded = new Map(); // model key -> Promise<prepared source>, and the ones already in
+
+function loadModel(key) {
+  if (sources.has(key)) return sources.get(key);
+  const spec = MODELS[key];
+  const pr = new Promise((res, rej) => new T.GLTFLoader().load(spec.url, (g) => { try { const p = prepare(g.scene, spec); loaded.set(key, p); res(p); } catch (e) { rej(e); } }, undefined, rej));
+  pr.catch((e) => console.warn('[people] body model failed, keeping built body:', key, e && e.message));
+  sources.set(key, pr); return pr;
+}
+/** Merge the model's skinned parts into one mesh on one skeleton and drop the head (each man keeps his own). */
+function prepare(root, spec) {
+  root.updateMatrixWorld(true);
+  const skinned = []; root.traverse((o) => { if (o.isSkinnedMesh) skinned.push(o); });
+  const first = skinned[0], bones = first.skeleton.bones, inv0 = first.bindMatrix.clone().invert();
+  const hideSet = new Set();
+  for (const name of spec.hide) { const b = bones.find((x) => x.name === name); if (b) b.traverse((d) => { const i = bones.indexOf(d); if (i >= 0) hideSet.add(i); }); }
+  const pos = [], nor = [], uv = [], si = [], sw = [], idx = [];
+  const v = new T.Vector3(), n = new T.Vector3(), nm = new T.Matrix3();
+  for (const m of skinned) {
+    const g = m.geometry, P = g.attributes.position, N = g.attributes.normal, U = g.attributes.uv, J = g.attributes.skinIndex, W = g.attributes.skinWeight;
+    const xf = inv0.clone().multiply(m.bindMatrix); nm.getNormalMatrix(xf);
+    const remap = m.skeleton.bones.map((b) => bones.indexOf(b));
+    const base = pos.length / 3, hidden = new Uint8Array(P.count);
+    for (let i = 0; i < P.count; i++) {
+      v.fromBufferAttribute(P, i).applyMatrix4(xf); pos.push(v.x, v.y, v.z);
+      n.fromBufferAttribute(N, i).applyMatrix3(nm).normalize(); nor.push(n.x, n.y, n.z);
+      uv.push(U ? U.getX(i) : 0, U ? U.getY(i) : 0);
+      let hw = 0;
+      for (let k = 0; k < 4; k++) { const bi = remap[J.getComponent(i, k)], w = W.getComponent(i, k); si.push(Math.max(0, bi)); sw.push(w); if (hideSet.has(bi)) hw += w; }
+      hidden[i] = hw > 0.35 ? 1 : 0;
+    }
+    const I = g.index;
+    for (let t = 0; t < (I ? I.count : P.count); t += 3) {
+      const a = I ? I.getX(t) : t, b = I ? I.getX(t + 1) : t + 1, c = I ? I.getX(t + 2) : t + 2;
+      if (!hidden[a] && !hidden[b] && !hidden[c]) idx.push(base + a, base + b, base + c);
+    }
+  }
+  const geo = new T.BufferGeometry();
+  geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); geo.setAttribute('normal', new T.Float32BufferAttribute(nor, 3));
+  geo.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
+  geo.setAttribute('skinIndex', new T.Uint16BufferAttribute(si, 4)); geo.setAttribute('skinWeight', new T.Float32BufferAttribute(sw, 4));
+  geo.setIndex(idx); geo.computeBoundingSphere();
+  for (const m of skinned) { if (m !== first) m.parent.remove(m); }
+  first.geometry = geo; first.name = 'body';
+  return { root, mesh: first, spec, material: first.material };
+}
+/** Copy a prepared model: the scene graph, with the mesh re-bound to its own copy of the skeleton. */
+function cloneModel(src) {
+  const root = src.root.clone(true), map = new Map(), a = [], b = [];
+  src.root.traverse((o) => a.push(o)); root.traverse((o) => b.push(o)); a.forEach((o, i) => map.set(o, b[i]));
+  const mesh = map.get(src.mesh), sk = src.mesh.skeleton;
+  mesh.bind(new T.Skeleton(sk.bones.map((x) => map.get(x)), sk.boneInverses), src.mesh.bindMatrix);
+  const bone = {}; root.traverse((o) => { if (o.isBone) bone[o.name] = o; });
+  return { root, mesh, bone };
+}
+// ---- colours: the outdoorsman's texture is recoloured per man (shirt, trousers, skin); the lean body is painted per vertex
+const bodyTex = new Map();
+function recolor(src, av) {
+  if (bodyTex.has(av.id)) return bodyTex.get(av.id);
+  const img = src.material.map && src.material.map.image; if (!img) return null;
+  const W = img.width, H = img.height, c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  // which texels belong to the trousers: paint the UV triangles of leg-weighted vertices into a mask
+  if (!src.legMask) {
+    const geo = src.mesh.geometry, U = geo.attributes.uv, J = geo.attributes.skinIndex, Wt = geo.attributes.skinWeight, I = geo.index, bones = src.mesh.skeleton.bones;
+    const leg = new Uint8Array(U.count);
+    for (let i = 0; i < U.count; i++) { let best = 0, bw = -1; for (let k = 0; k < 4; k++) { const w = Wt.getComponent(i, k); if (w > bw) { bw = w; best = J.getComponent(i, k); } } leg[i] = /thigh|calf|knee|pelvis/i.test(bones[best].name) ? 1 : 0; }
+    g.fillStyle = '#000'; g.fillRect(0, 0, W, H); g.fillStyle = '#fff'; g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath();
+    for (let t = 0; t < I.count; t += 3) { const a = I.getX(t), b = I.getX(t + 1), e = I.getX(t + 2); if (leg[a] + leg[b] + leg[e] < 2) continue;
+      g.moveTo(U.getX(a) * W, U.getY(a) * H); g.lineTo(U.getX(b) * W, U.getY(b) * H); g.lineTo(U.getX(e) * W, U.getY(e) * H); g.closePath(); }
+    g.fill(); g.stroke(); const m = g.getImageData(0, 0, W, H).data; src.legMask = new Uint8Array(W * H); for (let i = 0; i < W * H; i++) src.legMask[i] = m[i * 4] > 127 ? 1 : 0;
+  }
+  g.drawImage(img, 0, 0); const d = g.getImageData(0, 0, W, H), px = d.data, mask = src.legMask;
+  const srgb = (h) => new T.Color(h).getRGB({}, T.SRGBColorSpace); // work in the texture's own sRGB values
+  const top = srgb(av.jacket || av.shirt), pants = srgb(av.pants), skin = srgb(av.skin), hsl = {}, tmp = new T.Color();
+  const sat = (x) => x < 0 ? 0 : x > 1 ? 1 : x;
+  for (let i = 0; i < px.length; i += 4) {
+    tmp.setRGB(px[i] / 255, px[i + 1] / 255, px[i + 2] / 255, T.SRGBColorSpace); tmp.getHSL(hsl, T.SRGBColorSpace);
+    const h = hsl.h * 360, L = hsl.l; let target = null, ref = 0.5, x = (i / 4) % W, y = (i / 4 / W) | 0;
+    if (h > 190 && h < 262 && hsl.s > 0.08 && L > 0.15) { if (mask[i / 4]) { target = pants; ref = 0.5; } else { target = top; ref = 0.52; } } // denim / plaid shirt
+    else if ((h < 38 || h > 335) && L > 0.45 && hsl.s > 0.25) { target = skin; ref = 0.68; } // skin
+    if (!target) continue;
+    let k = L / ref;
+    if (target === top && av.camo) { const n = Math.sin(x * 0.045 + y * 0.02) + Math.sin(y * 0.05 - x * 0.03) * 0.8 + Math.sin(x * 0.07 + y * 0.06) * 0.5; k *= n > 0.9 ? 0.62 : n < -0.8 ? 1.25 : 1; }
+    if (target === top && !av.plaid && !av.camo) k = 0.82 + (k - 0.82) * 0.4; // flatten the check on plain shirts
+    px[i] = sat(target.r * k) * 255; px[i + 1] = sat(target.g * k) * 255; px[i + 2] = sat(target.b * k) * 255;
+  }
+  g.putImageData(d, 0, 0);
+  const tex = new T.CanvasTexture(c); tex.flipY = false; tex.colorSpace = T.SRGBColorSpace; tex.anisotropy = 4;
+  bodyTex.set(av.id, tex); return tex;
+}
+function paintLean(geo, bones, av) {
+  const P = geo.attributes.position, J = geo.attributes.skinIndex, W = geo.attributes.skinWeight, n = P.count, col = new Float32Array(n * 3);
+  geo.computeBoundingBox(); const bb = geo.boundingBox, Hh = bb.max.y - bb.min.y, y0 = bb.min.y;
+  const top = av.jacket || av.shirt, topShade = av.camo ? camoTone : av.plaid ? plaidTone : null, c = new T.Color();
+  for (let i = 0; i < n; i++) {
+    let best = 0, bw = -1; for (let k = 0; k < 4; k++) { const w = W.getComponent(i, k); if (w > bw) { bw = w; best = J.getComponent(i, k); } }
+    const name = (bones[best] && bones[best].name || '').toLowerCase(), y = (P.getY(i) - y0) / Hh;
+    let hex = top, shade = topShade;
+    if (/hand|finger|thumb|index|middle|ring|pinky|neck|head|jaw|lip|eye|brow/.test(name)) { hex = av.skin; shade = null; }
+    else if (/foot|toe/.test(name) || y < 0.075) { hex = av.boots; shade = (cc) => { if (y < 0.012) cc.multiplyScalar(0.55); }; }
+    else if (/leg/.test(name) || (/hips|bone/.test(name) && y < 0.5)) { hex = av.pants; shade = av.camo && !av.jacket ? camoTone : null; }
+    c.set(hex); if (shade) shade(c, P.getX(i) * 0.8, P.getY(i) * 0.8, P.getZ(i) * 0.8);
+    col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+  }
+  geo.setAttribute('color', new T.BufferAttribute(col, 3));
+}
+const leanGeo = new Map();
+/** Put a model body under the person: scale it to the man's height, straighten its arms to match our rest pose, graft his head. */
+function attachBody(person, src) {
+  const { av, rg, group } = person, spec = src.spec, mdl = cloneModel(src), q = new T.Quaternion(), v = new T.Vector3();
+  if (spec.textured) { const mat = src.material.clone(); const t = recolor(src, av); if (t) mat.map = t; mdl.mesh.material = mat; }
+  else { if (!leanGeo.has(av.id)) { const g = src.mesh.geometry.clone(); paintLean(g, src.mesh.skeleton.bones, av); leanGeo.set(av.id, g); } mdl.mesh.geometry = leanGeo.get(av.id); mdl.mesh.material = material(); }
+  mdl.mesh.castShadow = true; mdl.mesh.receiveShadow = true; mdl.mesh.frustumCulled = false;
+  const body = new T.Group(); body.name = 'body-model'; body.add(mdl.root);
+  // scale so the model's head joint sits where ours does
+  const tb = {}; for (const k of ORDER) tb[k] = mdl.bone[spec.map[k]];
+  mdl.root.updateMatrixWorld(true);
+  const ourHead = rg.k * 1.59, theirHead = tb.head.getWorldPosition(v).y;
+  body.scale.setScalar(ourHead / theirHead);
+  // work in the person group's own frame: park the group at the origin while measuring
+  const save = { p: group.position.clone(), q: group.quaternion.clone(), s: group.scale.clone(), parent: group.parent };
+  if (save.parent) save.parent.remove(group); group.position.set(0, 0, 0); group.quaternion.identity(); group.scale.set(1, 1, 1);
+  group.add(body); group.updateMatrixWorld(true);
+  // straighten the A-pose arms toward our rest (hanging, a little out from the body)
+  const wp = (o) => o.getWorldPosition(new T.Vector3()), wq = (o) => o.getWorldQuaternion(new T.Quaternion());
+  const setWorldQ = (bone, Q) => { const pq = wq(bone.parent); bone.quaternion.copy(pq.invert().multiply(Q)); bone.updateMatrixWorld(true); };
+  for (const [s, sx] of [['L', 1], ['R', -1]]) {
+    const want = new T.Vector3(sx * Math.sin(spec.armOut), -Math.cos(spec.armOut), 0);
+    for (const [a, b] of [['upperArm' + s, 'foreArm' + s], ['foreArm' + s, 'hand' + s]]) {
+      const dir = wp(tb[b]).sub(wp(tb[a])).normalize();
+      setWorldQ(tb[a], new T.Quaternion().setFromUnitVectors(dir, want).multiply(wq(tb[a])));
+    }
+  }
+  // relax the fingers into a loose grip (the models come with flat, spread hands)
+  const zAxis = new T.Vector3(0, 0, 1); const fingers = []; mdl.root.traverse((o) => { if (o.isBone && /^(index|middle|ring|pinky)/i.test(o.name)) fingers.push(o); });
+  for (const f of fingers) { const sx = wp(f).x > 0 ? 1 : -1; setWorldQ(f, new T.Quaternion().setFromAxisAngle(zAxis, -sx * spec.curl).multiply(wq(f))); }
+  const rest = {}; for (const k of ORDER) rest[k] = wq(tb[k]);
+  const hipsRest = wp(tb.hips), hipsRatio = hipsRest.y / (0.96 * rg.k);
+  // graft his own head and neck onto the model's head joint
+  const hg = buildGeometry(av, rig(av), new Set(['head', 'neck']), spec.neck);
+  const head = new T.Mesh(hg, materials(av)); head.castShadow = true; head.name = 'head';
+  const ref = rig(av); ref.root.updateMatrixWorld(true); const ourHeadPos = ref.bones.head.getWorldPosition(new T.Vector3());
+  head.position.copy(ourHeadPos).multiplyScalar(-spec.headScale); head.scale.setScalar(spec.headScale);
+  const holder = new T.Group(); holder.add(head);
+  const hm = tb.head.matrixWorld.clone().invert().multiply(new T.Matrix4().makeTranslation(wp(tb.head)));
+  hm.decompose(holder.position, holder.quaternion, holder.scale); tb.head.add(holder);
+  // restore the group where the game put it
+  group.position.copy(save.p); group.quaternion.copy(save.q); group.scale.copy(save.s); if (save.parent) save.parent.add(group);
+  person.proc.visible = false;
+  const gq = new T.Quaternion(), oq = new T.Quaternion(), pq = new T.Quaternion();
+  person.retarget = () => {
+    group.updateWorldMatrix(true, false); group.getWorldQuaternion(gq); const gi = gq.clone().invert();
+    rg.root.updateWorldMatrix(false, true);
+    // hips height (bob, sitting) carried over
+    const hp = rg.bones.hips.position, d = new T.Vector3(hp.x, hp.y - 0.96 * rg.k, hp.z).multiplyScalar(hipsRatio);
+    const want = group.localToWorld(hipsRest.clone().add(d)); tb.hips.parent.updateWorldMatrix(true, false); tb.hips.position.copy(tb.hips.parent.worldToLocal(want));
+    for (const k of ORDER) {
+      const ob = rg.bones[k], t = tb[k]; if (!t) continue;
+      ob.getWorldQuaternion(oq); const rel = gi.clone().multiply(oq); // our rotation from rest, in the person's frame
+      q.copy(gq).multiply(rel).multiply(rest[k]);
+      t.parent.updateWorldMatrix(true, false); t.parent.getWorldQuaternion(pq);
+      t.quaternion.copy(pq.invert().multiply(q)); t.updateMatrix(); t.updateWorldMatrix(false, false);
+    }
+  };
+  person.retarget();
+}
+
 /** Create a person. Returns { mesh, bones, avatar, pose(state, dt), attach(object, where) }. */
 function create(id) {
   T = window.THREE;
   const av = AVATARS.find((a) => a.id === id) || AVATARS[0];
   const rg = rig(av);
   if (!geoCache.has(av.id)) geoCache.set(av.id, buildGeometry(av, rig(av)));
-  const mesh = new T.SkinnedMesh(geoCache.get(av.id), materials(av));
-  mesh.add(rg.root); mesh.updateMatrixWorld(true); mesh.bind(new T.Skeleton(rg.list));
-  mesh.castShadow = true; mesh.receiveShadow = true; mesh.name = 'person-' + av.id;
+  const proc = new T.SkinnedMesh(geoCache.get(av.id), materials(av)); proc.name = 'built-body';
+  const mesh = new T.Group(); mesh.add(proc); mesh.add(rg.root); mesh.updateMatrixWorld(true); proc.bind(new T.Skeleton(rg.list));
+  proc.castShadow = true; proc.receiveShadow = true; mesh.name = 'person-' + av.id;
+  const person = { av, rg, group: mesh, proc, retarget: null };
+  if (BODY[av.id]) { if (loaded.has(BODY[av.id])) attachBody(person, loaded.get(BODY[av.id])); else loadModel(BODY[av.id]).then((src) => attachBody(person, src)).catch(() => {}); }
   const b = rg.bones;
   const st = { phase: Math.random(), aim: 0, ready: 0, sit: 0, wave: 0, run: 0, speed: 0, pitch: 0, recoil: 0, breathe: Math.random() * 6 };
   const holder = new T.Group(); holder.name = 'weapon-holder'; b.chest.add(holder);
@@ -342,11 +533,15 @@ function create(id) {
     holder.position.set(lerp3(-0.02, -0.11, st.aim) * rg.k, lerp3(0.0, 0.11, st.aim) * rg.k, lerp3(0.2, 0.12, st.aim) * rg.k);
     holder.rotation.set(lerp3(0.35, 0, st.aim) - st.recoil * 0.3, lerp3(0.95, -0.18, st.aim), lerp3(-0.4, 0, st.aim));
     holder.visible = st.ready > 0.15;
+    if (person.retarget) person.retarget();
   }
   const lerp3 = (a, c, t) => a + (c - a) * t;
   function attach(obj) { holder.clear(); if (obj) holder.add(obj); }
-  return { mesh, bones: b, avatar: av, pose, attach, holder, kick() { st.recoil = 1; }, state: st };
+  return { mesh, bones: b, avatar: av, pose, attach, holder, kick() { st.recoil = 1; }, state: st, get modelReady() { return !!person.retarget; } };
 }
 
-window.GOAPeople = { AVATARS, create };
+/** Start loading the body models (call early so portraits and companions get them). Resolves when all are in. */
+function preload() { T = window.THREE; return Promise.all([...new Set(Object.values(BODY))].map((k) => loadModel(k).catch(() => null))); }
+const usesModel = (id) => !!BODY[id];
+window.GOAPeople = { AVATARS, create, preload, usesModel };
 })();

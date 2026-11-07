@@ -31,7 +31,7 @@ Driving, exploration, wildlife, on-foot hunting, camping, fishing, Survival, VR 
 
 ## Files
 - `index.html`, `style.css`, `outfitter.css`, `world.js`, `loadout.js` — landing page and concept preview
-- `play/` — the game: `game.js` core; `wildlife.js` animals and Field Journal; `player.js` on foot and shooting; `characters.js` avatars; `weapons3d.js` weapons; `camping.js` camp life, companions and the Adventure panel; `fishing.js`; `survival.js` Survival and game modes; `xr.js` VR and AR; plus locations, outfitter, controller and UI modules
+- `play/` — the game: `game.js` core; `wildlife.js` animals and Field Journal; `player.js` on foot and shooting; `characters.js` avatars (procedural bodies for the women, rigged model bodies in `assets/characters/` for the men); `weapons3d.js` weapons; `camping.js` camp life, companions and the Adventure panel; `fishing.js`; `survival.js` Survival and game modes; `xr.js` VR and AR; plus locations, outfitter, controller and UI modules
 
 ## Assets
 See [play/CREDITS.html](play/CREDITS.html), [play/asset-lock.json](play/asset-lock.json), and the pine pack attribution under `play/assets/trees/sketchfab`. Third-party assets retain their respective terms. This repository does not grant a new license to supplied template code or artwork.
