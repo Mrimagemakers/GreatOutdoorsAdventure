@@ -1,0 +1,113 @@
+{
+ "season": {
+  "value": "dust",
+  "options": [
+   "green",
+   "dust",
+   "snow"
+  ],
+  "label": "Starting season"
+ },
+ "weather": {
+  "value": "clear",
+  "options": [
+   "clear",
+   "overcast",
+   "rain",
+   "fog",
+   "snowfall"
+  ],
+  "label": "Starting weather"
+ },
+ "topspeed": {
+  "value": 52,
+  "min": 25,
+  "max": 80,
+  "step": 1,
+  "label": "Top speed scale (52 is normal)"
+ },
+ "acceleration": {
+  "value": 9,
+  "min": 4,
+  "max": 18,
+  "step": 0.5,
+  "label": "Acceleration scale (9 is normal)"
+ },
+ "steering": {
+  "value": 1,
+  "min": 0.5,
+  "max": 1.6,
+  "step": 0.05,
+  "label": "Steering strength"
+ },
+ "drift": {
+  "value": 1,
+  "min": 0.3,
+  "max": 2,
+  "step": 0.05,
+  "label": "How easily cars drift"
+ },
+ "wintergrip": {
+  "value": 0.5,
+  "min": 0.15,
+  "max": 1,
+  "step": 0.01,
+  "label": "Grip on snow"
+ },
+ "camdistance": {
+  "value": 6.4,
+  "min": 4,
+  "max": 14,
+  "step": 0.2,
+  "label": "Default camera distance"
+ },
+ "camheight": {
+  "value": 1.9,
+  "min": 1,
+  "max": 6,
+  "step": 0.1,
+  "label": "Default camera height"
+ },
+ "particles": {
+  "value": 1,
+  "min": 0,
+  "max": 1.5,
+  "step": 0.05,
+  "label": "Rain, snow and dust amount"
+ },
+ "trees": {
+  "value": 14000,
+  "min": 500,
+  "max": 20000,
+  "step": 100,
+  "label": "Number of trees"
+ },
+ "grass": {
+  "value": 14000,
+  "min": 0,
+  "max": 24000,
+  "step": 500,
+  "label": "Grass clumps near the car"
+ },
+ "nitropower": {
+  "value": 1.4,
+  "min": 1.1,
+  "max": 2,
+  "step": 0.05,
+  "label": "Nitro top speed boost"
+ },
+ "nitroburn": {
+  "value": 0.24,
+  "min": 0.08,
+  "max": 0.6,
+  "step": 0.01,
+  "label": "Nitro used per second"
+ },
+ "nitrorefill": {
+  "value": 0.03,
+  "min": 0,
+  "max": 0.2,
+  "step": 0.005,
+  "label": "Nitro refill per second"
+ }
+}

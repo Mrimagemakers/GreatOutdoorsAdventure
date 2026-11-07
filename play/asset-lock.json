@@ -1,0 +1,25 @@
+{
+  "packages": [
+    {
+      "id": "goa-sketchfab-pines-v1",
+      "version": 1,
+      "license": "CC-BY-4.0",
+      "source": "https://sketchfab.com/3d-models/pine-trees-pack-lowpoly-game-ready-lods-e1e9c07b8e2e445c943fec660beefba2",
+      "sourceSha256": "5471eebff730c7d60bf073d9a63b31a02e0f3e411d103b7e7332d3459b4b15f0",
+      "files": [
+        {
+          "path": "pine-forest-lod2.glb",
+          "sha256": "758efff8a73f2aa135df8d8d41a3e5d56d09b1f373bc2b636d1a952b6fc335cb",
+          "bytes": 15296804,
+          "triangles": 4567
+        },
+        {
+          "path": "ATTRIBUTION.txt",
+          "sha256": "0fba29cb6a2641827269947a7bf607a1aa91a10f9aca02de7a82e9c75538aeae",
+          "bytes": 456
+        }
+      ],
+      "verification": "SHA-256 bytes verified; runtime rendering checked separately"
+    }
+  ]
+}

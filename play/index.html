@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Great Outdoors Adventure — Driving & Camp Prototype</title>
+<meta name="description" content="A controller-ready driving and camping prototype based on Long Valley, with selectable expedition vehicles, weapon inventory and deployable camp gear.">
+<meta name="podbot-orientation" content="landscape">
+<meta name="podbot-start" content="Enter">
+<link rel="preload" href="assets/fonts/barlow-600.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face{font-family:"Valley";src:url(assets/fonts/barlow-500.woff2) format("woff2");font-weight:500;font-display:swap}
+@font-face{font-family:"Valley";src:url(assets/fonts/barlow-600.woff2) format("woff2");font-weight:600;font-display:swap}
+@font-face{font-family:"Valley";src:url(assets/fonts/barlow-700.woff2) format("woff2");font-weight:700;font-display:swap}
+:root{--paper:#F2EEE6;--ink:#1E2226;--accent:#E8B53A;--rule:rgba(30,34,38,.18);--shadow:0 6px 18px rgba(20,24,28,.22),0 1px 3px rgba(20,24,28,.18)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:#b9c6cf;font-family:"Valley","Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;color:var(--ink);touch-action:none;user-select:none;-webkit-user-select:none}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block}
+.card{background:rgba(242,238,230,.95);border-radius:6px;box-shadow:var(--shadow)}
+.lbl{font-size:10.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;opacity:.72}
+.num{font-variant-numeric:tabular-nums}
+button{font-family:inherit;color:var(--ink)}
+#hud{position:fixed;inset:0;pointer-events:none;transition:opacity .4s}
+#hud.hidden{opacity:0}
+#hud.hidden *{pointer-events:none!important}
+#hud.pre .run{display:none}
+
+/* conditions strip */
+#cond{position:absolute;left:max(14px,env(safe-area-inset-left));top:14px;display:flex;align-items:stretch;padding:8px 6px 6px;pointer-events:auto}
+#cond .grp{display:flex;flex-direction:column;padding:0 6px}
+#cond .grp+.grp{border-left:1px solid var(--rule)}
+#cond .tiles{display:flex;gap:2px;margin-top:4px}
+.tile{background:none;border:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 7px 6px;min-width:52px;border-radius:3px;position:relative}
+.tile svg{width:20px;height:20px;stroke:var(--ink);fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.tile span{font-size:11px;font-weight:600;letter-spacing:.1em}
+.tile:hover{background:rgba(30,34,38,.06)}
+.tile.on::after{content:"";position:absolute;left:8px;right:8px;bottom:0;height:3px;background:var(--accent);border-radius:1px}
+#condbtn{display:none}
+
+/* brand + tools */
+#brand{position:absolute;right:max(14px,env(safe-area-inset-right));top:14px;padding:10px 16px 9px;min-width:190px}
+#brand b{display:block;font-size:14px;letter-spacing:.24em;font-weight:700}
+#brand .lbl{margin-top:2px}
+#tools{position:absolute;right:max(14px,env(safe-area-inset-right));top:74px;display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;pointer-events:auto;max-width:calc(100vw - 28px)}
+.chip{font-size:11.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;background:rgba(242,238,230,.93);border:0;border-radius:4px;padding:7px 10px;box-shadow:var(--shadow);cursor:pointer;min-height:30px}
+.chip:hover{background:#fff}
+
+/* lap card */
+#lap{position:absolute;left:50%;top:14px;transform:translateX(-50%);padding:7px 16px 8px;display:flex;gap:18px;align-items:flex-end}
+#lap .v{font-size:22px;font-weight:600;line-height:1.05}
+#lap .s{font-size:14px;font-weight:600}
+#drift{position:absolute;left:50%;top:76px;transform:translateX(-50%);padding:5px 12px;font-size:13px;font-weight:600;letter-spacing:.08em;opacity:0;transition:opacity .3s}
+
+/* speed dial */
+#dial{position:absolute;right:max(14px,env(safe-area-inset-right));bottom:14px;width:178px;height:178px;border-radius:50%}
+#dial svg{width:100%;height:100%}
+#surface{position:absolute;right:max(14px,env(safe-area-inset-right));bottom:198px;padding:4px 10px;font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase}
+
+/* minimap */
+#map{position:absolute;left:max(14px,env(safe-area-inset-left));bottom:14px;width:170px;height:170px;padding:0;overflow:hidden}
+#map canvas{width:100%;height:100%;display:block}
+
+/* hint, toast */
+#hint{position:absolute;left:max(14px,env(safe-area-inset-left));bottom:198px;padding:10px 14px;font-size:13.5px;line-height:1.65;max-width:320px;transition:opacity .8s}
+#hint kbd{font-family:inherit;font-size:11.5px;font-weight:600;border:1px solid var(--rule);border-radius:3px;padding:0 5px;background:#fff}
+#hint.gone{opacity:0}
+#toast{position:absolute;left:50%;top:116px;transform:translateX(-50%);padding:7px 14px;font-size:14px;font-weight:600;letter-spacing:.04em;opacity:0;transition:opacity .5s;white-space:nowrap}
+#note{position:absolute;left:50%;bottom:20px;transform:translateX(-50%);padding:6px 12px;font-size:13px;opacity:0;transition:opacity .4s;white-space:nowrap}
+#rainfx{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .8s}
+
+/* touch */
+#touch{display:none}
+body.touch #touch{display:block}
+.tb{position:fixed;pointer-events:auto;width:76px;height:76px;border-radius:50%;background:rgba(242,238,230,.55);border:1px solid rgba(30,34,38,.25);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;letter-spacing:.12em;color:var(--ink);touch-action:none;box-shadow:0 3px 10px rgba(0,0,0,.15)}
+.tb.on{background:rgba(242,238,230,.92)}
+.tb svg{width:30px;height:30px;fill:var(--ink)}
+#tLeft{left:max(14px,env(safe-area-inset-left));bottom:20px}
+#tRight{left:calc(max(14px,env(safe-area-inset-left)) + 88px);bottom:20px}
+#tGas{right:max(14px,env(safe-area-inset-right));bottom:20px;width:86px;height:86px}
+#tBrake{right:calc(max(14px,env(safe-area-inset-right)) + 98px);bottom:20px}
+#tDrift{right:calc(max(14px,env(safe-area-inset-right)) + 42px);bottom:118px;width:62px;height:62px;font-size:11px}
+#nitro{position:absolute;right:calc(max(14px,env(safe-area-inset-right)) + 192px);bottom:14px;width:170px;padding:7px 12px 9px}
+#nitro i{display:block;height:7px;margin-top:5px;background:rgba(30,34,38,.15);border-radius:2px;overflow:hidden}
+#nitro em{display:block;height:100%;width:100%;background:linear-gradient(90deg,#3a7bd5,#7fc4ff);transition:width .1s}
+#nitro.burn em{background:linear-gradient(90deg,#ff7a1a,#ffd36a)}
+#nitro .key{font-size:9.5px;border:1px solid var(--rule);border-radius:3px;padding:0 4px;margin-left:4px;letter-spacing:.08em}
+body.touch #nitro{right:auto;left:50%;transform:translateX(-50%);width:128px;bottom:14px}
+body.touch #nitro .key{display:none}
+body.touch #note{bottom:66px}
+#tNitro{right:calc(max(14px,env(safe-area-inset-right)) + 112px);bottom:118px;width:62px;height:62px;font-size:11px;background:rgba(255,190,120,.6)}
+#stunt{position:absolute;left:50%;top:24%;transform:translateX(-50%);text-align:center;opacity:0;transition:opacity .4s;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.55),0 0 2px rgba(0,0,0,.6);white-space:nowrap}
+#stunt b{display:block;font-size:clamp(22px,4.2vw,40px);letter-spacing:.14em;font-weight:700}
+#stunt span{display:block;font-size:clamp(13px,1.8vw,17px);font-weight:600;letter-spacing:.08em;margin-top:2px}
+#build{position:absolute;left:50%;top:76px;transform:translateX(-50%);padding:10px 12px;display:none;pointer-events:auto;width:min(460px,calc(100vw - 28px))}
+#build.open{display:block}
+#build .bhead{display:flex;justify-content:space-between;align-items:center}
+#build .bk{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+#build .btn{font-size:11px;padding:7px 9px}
+#build #buildcount{margin-top:8px}
+#tRamp{left:calc(max(14px,env(safe-area-inset-left)) + 130px);bottom:108px;width:56px;height:56px;font-size:10.5px}
+body.tsmall .tb{transform:scale(.82);transform-origin:bottom center}
+body.tlarge .tb{transform:scale(1.16);transform-origin:bottom center}
+body.nohand #tDrift{display:none}
+body.touch #dial{bottom:auto;top:auto;width:120px;height:120px;bottom:196px}
+body.touch #surface{bottom:322px}
+body.touch #map{width:110px;height:110px;bottom:112px}
+body.touch #hint{bottom:336px;max-width:calc(100vw - 28px)}
+
+/* overlays */
+.sheet{position:fixed;z-index:7;pointer-events:auto;background:rgba(242,238,230,.97)}
+#settings{right:max(14px,env(safe-area-inset-right));top:14px;bottom:14px;width:min(540px,calc(100vw - 28px));display:none;flex-direction:column;overflow:hidden}
+#settings.open{display:flex}
+.sethead{display:flex;justify-content:space-between;align-items:center;padding:12px 16px 8px}
+.sethead b{font-size:14px;letter-spacing:.22em}
+.tabs{display:flex;gap:0;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding:0 8px;border-bottom:1px solid var(--rule)}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{background:none;border:0;font-family:inherit;color:var(--ink);font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;padding:8px 7px 9px;cursor:pointer;position:relative;opacity:.6;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:52px;flex:none}
+.tabs button:hover{opacity:.9}
+.tabs svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.tabs button.on{opacity:1}
+.tabs button.on::after{content:"";position:absolute;left:6px;right:6px;bottom:-1px;height:3px;background:var(--accent)}
+.setbody{flex:1;overflow-y:auto;padding:4px 16px 12px;-webkit-overflow-scrolling:touch;touch-action:pan-y}
+.setfoot{padding:8px 16px 12px;border-top:1px solid var(--rule);text-align:right}
+.srow{padding:11px 0;border-bottom:1px solid var(--rule)}
+.shead{font-size:10.5px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;padding:18px 0 4px;border-bottom:1px solid var(--ink);display:flex;align-items:center;gap:8px}
+.shead::before{content:"";width:14px;height:3px;background:var(--accent)}
+.setbody>.shead:first-child{padding-top:8px}
+body.nomap #map,body.nodial #dial,body.nolap #lap,body.nosurf #surface{display:none!important}
+.srow[data-k=_fps] .val{color:var(--ink);background:#fff;border:1px solid var(--rule);border-radius:3px;padding:1px 7px}
+.srow .top{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:15px;font-weight:500}
+.srow .val{font-variant-numeric:tabular-nums;font-size:14px;font-weight:600}
+.srow .hint{font-size:12.5px;opacity:.65;margin-top:3px;line-height:1.4}
+.srow input[type=range]{width:100%;margin:8px 0 0;accent-color:var(--ink);height:26px}
+.opts{display:flex;gap:4px;flex-wrap:wrap;margin-top:7px}
+.opts button{background:#fff;border:1px solid var(--rule);border-radius:4px;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:7px 10px;cursor:pointer;position:relative;min-height:32px}
+.opts button.on{border-color:var(--ink)}
+.opts button.on::after{content:"";position:absolute;left:6px;right:6px;bottom:2px;height:3px;background:var(--accent)}
+.sw{position:relative;width:46px;height:26px;border-radius:13px;background:rgba(30,34,38,.2);border:0;cursor:pointer;flex:none}
+.sw::after{content:"";position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 2px rgba(0,0,0,.3)}
+.sw.on{background:var(--ink)}.sw.on::after{left:23px;background:var(--accent)}
+.vcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-top:8px}
+.vcard{display:flex;flex-direction:column;gap:6px;align-items:stretch;background:#fff;border:1px solid var(--rule);border-radius:5px;padding:0 0 12px;cursor:pointer;text-align:left;position:relative;overflow:hidden;font-family:inherit;color:var(--ink)}
+.vcard>div:last-child{padding:0 12px}
+.vcard:hover{border-color:rgba(30,34,38,.45)}
+.vcard.on{border-color:var(--ink)}
+.vcard.on::after{content:"";position:absolute;left:12px;right:12px;bottom:4px;height:3px;background:var(--accent)}
+.vpic{position:relative;aspect-ratio:16/9;background:#d9d4c8 url(assets/garage/bg.webp) center 62%/cover no-repeat;border-bottom:1px solid var(--rule);display:flex;align-items:flex-end;justify-content:center;overflow:hidden}
+.vpic::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(242,238,230,.18),rgba(242,238,230,0) 40%,rgba(30,34,38,.08))}
+.vpic img{position:relative;width:86%;height:78%;margin-bottom:5%;object-fit:contain;object-position:center bottom;display:block;user-select:none;filter:drop-shadow(0 6px 6px rgba(20,24,28,.28));transition:transform .25s}
+.vcard:hover .vpic img{transform:translateY(-2px) scale(1.02)}
+.vpic canvas{width:70%;height:auto}
+.vtag{position:absolute;left:8px;top:8px;background:var(--accent);color:var(--ink);font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;padding:2px 6px;border-radius:2px}
+#fps{position:absolute;right:max(14px,env(safe-area-inset-right));top:64px;padding:3px 8px;font-size:12px;font-weight:600;letter-spacing:.06em}
+.vcard b{display:block;font-size:14px;letter-spacing:.06em}
+.vcard small{display:block;font-size:12px;opacity:.7;line-height:1.35;margin-top:2px}
+.bars{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;font-size:10px;letter-spacing:.12em;margin-top:4px;align-items:center}
+.bars i{display:block;height:3px;background:var(--rule);position:relative}
+.bars i em{position:absolute;left:0;top:0;bottom:0;background:var(--ink)}
+.help{font-size:14px;line-height:1.75}
+.help kbd{font-family:inherit;font-size:11.5px;font-weight:600;border:1px solid var(--rule);border-radius:3px;padding:0 5px;background:#fff}
+.help h4{margin:12px 0 2px;font-size:11px;letter-spacing:.16em;text-transform:uppercase}
+.btn{background:#fff;border:1px solid var(--rule);border-radius:4px;font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;padding:7px 12px;cursor:pointer}
+.btn.dark{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+#bigmap{left:50%;top:50%;transform:translate(-50%,-50%);width:min(820px,calc(100vw - 20px));height:calc(100vh - 20px);display:none;flex-direction:column;padding-bottom:10px}
+#bigmap.open{display:flex}
+#bigc{flex:1;min-height:0;width:100%;display:block;cursor:crosshair;touch-action:none}
+.mapbtns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.mapbtns .btn:disabled{opacity:.4;cursor:default}
+.maphint{font-size:12.5px;line-height:1.4;opacity:.75;padding:6px 16px 0}
+#board,#summary{left:50%;top:50%;transform:translate(-50%,-50%);width:min(380px,calc(100vw - 28px));max-height:calc(100vh - 28px);overflow:auto;padding:16px 18px;display:none}
+#board h3,#summary h3{margin:0 0 10px;font-size:13px;letter-spacing:.22em}
+#board ol{margin:0;padding-left:22px;font-size:15px;line-height:1.75;font-variant-numeric:tabular-nums}
+#board a{color:var(--ink)}
+#board li.mine{font-weight:700}
+#sumbody{font-size:15px;line-height:1.85;font-variant-numeric:tabular-nums}
+#sumbody div{display:flex;justify-content:space-between;border-bottom:1px solid var(--rule)}
+
+/* title */
+#title{position:fixed;inset:0;z-index:5;display:flex;align-items:flex-end;padding:0 0 max(34px,env(safe-area-inset-bottom)) max(34px,env(safe-area-inset-left));background:linear-gradient(0deg,rgba(20,24,28,.32),rgba(20,24,28,0) 45%);pointer-events:none}
+#title .t{pointer-events:auto;color:var(--paper);max-width:min(460px,calc(100vw - 48px))}
+#title h1{margin:0;font-size:clamp(20px,3.2vw,28px);letter-spacing:.42em;font-weight:700}
+#title .rule{width:120px;height:3px;background:var(--accent);margin:10px 0 12px}
+#title p{margin:0 0 16px;font-size:15px;line-height:1.5;opacity:.95;text-shadow:0 1px 6px rgba(0,0,0,.35)}
+#go{font-family:inherit;font-size:13px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;background:var(--paper);color:var(--ink);border:0;border-radius:4px;padding:11px 20px;cursor:pointer;box-shadow:var(--shadow)}
+#go:disabled{opacity:.7;cursor:default}
+#loading{font-size:12px;letter-spacing:.1em;margin-top:10px;opacity:.85}
+
+@media (max-width:899px){
+  #cond{display:none;flex-direction:column;top:56px;max-width:calc(100vw - 28px)}
+  #cond.open{display:flex}
+  #cond .grp+.grp{border-left:0;border-top:1px solid var(--rule);padding-top:6px;margin-top:4px}
+  #cond .tiles{flex-wrap:wrap}
+  #condbtn{display:block;position:absolute;left:max(14px,env(safe-area-inset-left));top:14px;pointer-events:auto}
+  #brand{display:none}
+  #tools{top:14px;max-width:calc(100vw - 180px)}
+  #lap{top:auto;bottom:auto;top:90px;left:auto;right:max(14px,env(safe-area-inset-right));transform:none;padding:5px 10px;gap:10px}
+  #lap .v{font-size:17px}
+  #toast{top:150px}
+  #drift{top:120px}
+  #settings{left:8px;right:8px;top:auto;bottom:8px;width:auto;height:min(80vh,640px)}
+}
+@media (max-width:899px) and (min-width:600px){ #tools{max-width:none} }
+@media (max-height:500px){
+  #settings{top:8px;bottom:8px;height:auto;left:auto;width:min(400px,calc(100vw - 16px))}
+  #map{display:none}
+  body.touch #dial{bottom:auto;top:auto;bottom:112px;width:104px;height:104px}
+  body.touch #surface{display:none}
+  #lap{top:52px;right:auto;left:max(14px,env(safe-area-inset-left));transform:none}
+  body.touch #tDrift{bottom:20px;right:calc(max(14px,env(safe-area-inset-right)) + 184px)}
+  body.touch #tRamp{left:calc(max(14px,env(safe-area-inset-left)) + 40px);bottom:106px}
+  #build{top:52px}
+  body.touch #tNitro{bottom:108px;right:calc(max(14px,env(safe-area-inset-right)) + 124px)}
+  #toast{top:60px}
+  #hint{display:none}
+  #cond.open{z-index:5}
+  #cond.open ~ #lap{visibility:hidden}
+}
+@media (max-width:420px){ .tb{width:66px;height:66px} #tRight{left:calc(max(14px,env(safe-area-inset-left)) + 76px)} #tGas{width:76px;height:76px} #tBrake{right:calc(max(14px,env(safe-area-inset-right)) + 86px)} .chip{padding:6px 8px;font-size:10.5px} }
+</style>
+<link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAA/1BMVEXlnRX1pwPlXAH52V/27d3sKhrzlAH52iKlZghYJhH3bgAwEg/u2hz64J3xmAPz9ef57KemEwPisl7ZcQD52Bb/AABnYF1lSx3ZbgD05LOqVQC6UAGqqlW9oWL/f3/cuZHJvsr4xwv39GD37dR/fwB///+AXEW6vdC/w7//qlX/qqr15b357s4AAAD7xwb4qAXoeAL8uATrhQLzmQLTZwH81gb86bPFWgH+5An99tH//QDbcwH72I4SAAD5y26/fwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADqOUkZAAAAQHRSTlPyFPD/8v5i8v3/C/8g8KMcEv7/XqUB//6pagNJA/8C//9nEmcCAv///wMDhLkA/v36/v38/P77/f79A/v8//8EtAR+KwAAAm9JREFUeNpdk4lW2zAQRUeyIy9x7OwJUAqU7q12yTvm//+qI0MOlDnezryr55E0An6JHu8q7rq44u8DLh9r/hiv6i6Ou/pv/PhtXX0A1vyq62okui48rjDxH/CbV6swHrW4jrvVquJf3gPz+LF+CWTGrvvz6jEDn/l6VdfTWI8Bwjuqa/T4fAGqvhqncYQogu00TRBNMI5TjelX4BNfRwBgBmuMEFZJZRKAcY3CC0B6AtIMiwWlVEq6wI/BSCD9rxnoe0442VtF6UJJra1CUMkSk7z/ygEXsAjFFIzRjfRR5O2GMjbncKY98GLf7gveP+whTUUAREqhfOhfBSiSVgpWgG9tKhKdhCuViYCCCdkmBaDu7G4vvE9PGfgo8ZCd0taLklmHBFAD2uRS+FOWok3StgLS5ckLmVsNhsKN08KCFiKVIvEthkf/VAhdWqHdDfCz0Vpq4cU2vr9Dwt/dx1uBgNVanTkcdkZaBFA/Hn9s23Y6Hn8GQlsrze4AnChrLAJj/LRc3rbtLb7iSeCKGTsQDjnfGRMsovh7lkXeR9nyGEf4W2PMjudw6AlVBpdYRKst6khsV5HQ0qqBkh5/ESxU2AQsLM0wUi+CPjiFBmE3CS/RAgkPT3Pg9IKBKlEKQH5gagiISLE+DBASd98pdshnALdbORcKhWyDkVmcIWYUCWclNMwzL6kbkJAbbJbFRlprhsaVKLwAeU9U0yChQzdh1xjjmkaRPr90dc4ZbdDDSDXrCnXKeP52Lp45Qw8XKg3lh/EsTOHtZAUC065xeAWUzQW8O5vXnJQozuEcduz1x9ONAwg7K1yRMyP8Mp7zf3Sbk+9myTBeAAAAAElFTkSuQmCC">
+<link rel="stylesheet" href="expedition.css"><link rel="stylesheet" href="locations.css"><link rel="stylesheet" href="xr.css"><link rel="stylesheet" href="driving-ui.css"></head>
+<body>
+<canvas id="c"></canvas>
+<canvas id="rainfx"></canvas>
+<div id="hud" class="pre">
+  <button class="chip" id="condbtn">Conditions</button>
+  <div id="cond" class="card">
+    <div class="grp"><div class="lbl">Season</div><div class="tiles" id="seasons"></div></div>
+    <div class="grp"><div class="lbl">Weather</div><div class="tiles" id="weathers"></div></div>
+  </div>
+  <div id="brand" class="card"><b>GREAT OUTDOORS</b><div class="lbl" id="mode">Free drive</div></div>
+  <div id="tools">
+    <button class="chip" id="setbtn">Settings</button>
+    <button class="chip" id="carbtn">Car</button>
+    <button class="chip" id="mapbtn">Map</button>
+    <button class="chip run" id="rampbtn">Ramps</button>
+    <button class="chip" id="cambtn">Camera</button>
+    <button class="chip run" id="resetbtn">Reset</button>
+    <button class="chip" id="boardbtn">Laps</button>
+    <button class="chip run" id="hintbtn">Controls</button>
+    <button class="chip run" id="endbtn">Finish</button>
+  </div>
+  <div id="lap" class="card run">
+    <div><div class="lbl">Lap <span id="lapn">1</span></div><div class="v num" id="laptime">0:00.0</div></div>
+    <div><div class="lbl">Best</div><div class="s num" id="best">-</div></div>
+    <div><div class="lbl">Split</div><div class="s num" id="split">-</div></div>
+  </div>
+  <div id="drift" class="card num"></div>
+  <div id="toast" class="card"></div>
+  <div id="stunt"><b id="stuntname"></b><span id="stuntpts"></span></div>
+  <div id="build" class="card run"><div class="bhead"><span class="lbl">Build a ramp</span><button class="btn" id="buildclose">Close</button></div><div class="bk" id="buildkinds"></div><div class="bk"><button class="btn dark" id="buildplace">Build ahead (B)</button><button class="btn" id="buildremove">Remove nearest (X)</button><button class="btn" id="buildclear">Remove all mine</button></div><div class="lbl" id="buildcount"></div></div>
+  <div id="note" class="card"></div>
+  <div id="hint" class="card run gone"></div>
+  <div id="surface" class="card run">Asphalt</div>
+  <div id="map" class="card run"><canvas id="mapc" width="340" height="340"></canvas></div>
+  <div id="dial" class="card run"></div>
+  <div id="fps" class="card num" style="display:none"></div>
+  <div id="nitro" class="card run"><div class="lbl">Nitro <span class="key">Shift</span></div><i><em id="nitrofill"></em></i></div>
+</div>
+<div id="touch">
+  <div class="tb" id="tLeft"><svg viewBox="0 0 24 24"><path d="M15 4 6 12l9 8z"/></svg></div>
+  <div class="tb" id="tRight"><svg viewBox="0 0 24 24"><path d="m9 4 9 8-9 8z"/></svg></div>
+  <div class="tb" id="tBrake">BRAKE</div>
+  <div class="tb" id="tGas">GAS</div>
+  <div class="tb" id="tDrift">DRIFT</div>
+  <div class="tb" id="tNitro">NITRO</div>
+  <div class="tb" id="tRamp">RAMP</div>
+</div>
+<div id="settings" class="sheet card" role="dialog" aria-label="Settings">
+  <div class="sethead"><b>SETTINGS</b><button class="btn" id="setclose">Close</button></div>
+  <div class="tabs" id="settabs"></div>
+  <div class="setbody" id="setbody"></div>
+  <div class="setfoot"><a class="btn" href="CREDITS.html" target="_blank" rel="noopener">Asset credits ↗</a><button class="btn" id="setreset">Reset this tab</button></div>
+</div>
+<div id="bigmap" class="sheet card" role="dialog" aria-label="Valley map">
+  <div class="sethead"><b>VALLEY MAP</b><div class="mapbtns"><button class="btn" id="mkclear">Clear marker</button><button class="btn" id="mkgo">Go to marker</button><button class="btn dark" id="mapclose">Close</button></div></div>
+  <canvas id="bigc"></canvas>
+  <div class="maphint">Click or tap anywhere to set a marker. A beam shows it in the valley and the small map points to it. You can drive anywhere inside the ring, on or off the road. M opens and closes this map.</div>
+</div>
+<div id="board" class="sheet card"><h3>BEST LAPS</h3><ol id="boardlist"><li>Loading</li></ol><div style="margin-top:12px;text-align:right"><button class="btn" id="boardclose">Close</button></div></div>
+<div id="summary" class="sheet card"><h3>DRIVE FINISHED</h3><div id="sumbody"></div><div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end"><button class="btn" id="sumboard">Best laps</button><button class="btn dark" id="sumgo">Drive again</button></div></div>
+<div id="title">
+  <div class="t">
+    <h1 id="ttl">GREAT OUTDOORS<br>ADVENTURE</h1>
+    <div class="rule"></div>
+    <p id="sub">Drive the valley. Choose your expedition vehicle, equip your loadout, and set up camp. Xbox and PlayStation controller support. Driving & camp prototype — hunting gameplay is still in development.</p><p style="font-size:13px">Controller: RT/R2 gas · LT/L2 brake · left stick steer · Menu/Options pause<br>Press A / Cross to start. Keyboard and touch also supported.</p>
+    <button id="go" disabled>Loading the valley</button>
+    <div id="loading"></div>
+  </div>
+</div>
+<script src="vendor/three-0.185.1.min.js"></script>
+<script src="controller-core.js"></script><script src="controller.js"></script><script src="camp-models.js"></script><script src="expedition.js"></script><script src="locations.js"></script><script src="xr.js"></script><script src="driving-ui.js"></script><script src="game.js"></script>
+
+
+</body>
+</html>
+
