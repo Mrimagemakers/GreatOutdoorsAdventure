@@ -243,6 +243,10 @@ function progress() { const el = $('loading'); if (el && !ready) el.textContent 
 const TX = {
   gG: tex('assets/tex/grass_green.jpg'), gD: tex('assets/tex/grass_dry.jpg'), dirt: tex('assets/tex/dirt.jpg'), grav: tex('assets/tex/gravel.jpg'),
   rock: tex('assets/tex/rock.jpg'), snow: tex('assets/tex/snow.jpg'), asp: tex('assets/tex/asphalt.jpg'), snowRoad: tex('assets/tex/snowroad.jpg'),
+  // retexture: a matching normal map for every ground surface, so pebbles, cracks, grass and snow crust catch the light
+  gGN: tex('assets/tex/grass_green_n.jpg', false), gDN: tex('assets/tex/grass_dry_n.jpg', false), dirtN: tex('assets/tex/dirt_n.jpg', false),
+  gravN: tex('assets/tex/gravel_n.jpg', false), rockN: tex('assets/tex/rock_n.jpg', false), snowN: tex('assets/tex/snow_n.jpg', false),
+  aspN: tex('assets/tex/asphalt_n.jpg', false), snowRoadN: tex('assets/tex/snowroad_n.jpg', false),
   pine: tex('assets/sprites/pine.webp', true, false), pineSnow: tex('assets/sprites/pine_snow.webp', true, false),
   pine2: tex('assets/sprites/pine2.webp', true, false), grass: tex('assets/sprites/grass_clump.webp', true, false),
   firSnow: tex('assets/sprites/fir_snow.webp', true, false),
@@ -284,6 +288,7 @@ const groundN = normalFromHeight(256, 256, (x, y) => fbm(x / 9, y / 9, 4) + fbm(
 const U = {
   tGG: { value: TX.gG }, tGD: { value: TX.gD }, tDirt: { value: TX.dirt }, tGrav: { value: TX.grav }, tRock: { value: TX.rock }, tSnow: { value: TX.snow },
   tAsp: { value: TX.asp }, tSnowRoad: { value: TX.snowRoad }, tGN: { value: groundN },
+  tGGn: { value: TX.gGN }, tGDn: { value: TX.gDN }, tDirtN: { value: TX.dirtN }, tGravN: { value: TX.gravN }, tRockN: { value: TX.rockN }, tSnowN: { value: TX.snowN },
   uDry: { value: 1 }, uSnow: { value: 0 }, uWet: { value: 0 }, uSnowline: { value: 330 }, uTime: { value: 0 }, uPuddle: { value: 0 },
   uDustCol: { value: C('#cbb48c') },
   uCloudSh: { value: 0 }, uCloudCov: { value: 0.6 }, uCloudOff: { value: new T.Vector2() },
@@ -300,6 +305,15 @@ float cloudSh(vec2 xz){ if (uCloudSh <= 0.0) return 1.0; vec2 q = xz + uCloudOff
 const CLOUD_LIGHT = '#include <lights_fragment_end>\n{ float cS = cloudSh(vWP.xz); reflectedLight.directDiffuse *= cS; reflectedLight.directSpecular *= cS; }';
 const GLSL_COMMON = CLOUD_GLSL + `
 uniform sampler2D tGG, tGD, tDirt, tGrav, tRock, tSnow, tAsp, tSnowRoad, tGN;
+uniform sampler2D tGGn, tGDn, tDirtN, tGravN, tRockN, tSnowN;
+// tangent-space normal, sampled with the same two-layer anti-tiling blend as the colour (tx2)
+vec3 txn(sampler2D t, vec2 p){
+  vec2 q=mat2(0.8,-0.6,0.6,0.8)*p*0.93+vec2(0.37,0.71);
+  float textureBlend=smoothstep(0.23,0.77,cvn(p*0.12));
+  vec3 a=texture2D(t,p).xyz*2.0-1.0, b=texture2D(t,q).xyz*2.0-1.0;
+  b.xy=mat2(0.8,0.6,-0.6,0.8)*b.xy; // undo the layer's rotation so its slopes point the right way
+  return mix(a,b,textureBlend*0.68);
+}
 uniform float uDry, uSnow, uWet, uSnowline, uTime, uPuddle; uniform vec3 uDustCol;
 vec3 tx2(sampler2D t, vec2 p){
   vec2 q=mat2(0.8,-0.6,0.6,0.8)*p*0.93+vec2(0.37,0.71);
@@ -489,17 +503,26 @@ function terrainMaterial(far) {
         diffuseColor.rgb *= col;
       `)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
-        float detailHeight=mix(dot(tx2(tDirt,vWP.xz/2.0),vec3(.3,.5,.2)),dot(tx2(tRock,vWP.xz/3.0),vec3(.3,.5,.2)),rock);
-        detailHeight=mix(detailHeight,texture2D(tSnow,vWP.xz/3.0).r*.3,snow);
-        vec3 surfacePosition=-vViewPosition;vec3 dx=dFdx(surfacePosition),dy=dFdy(surfacePosition);
-        vec3 rx=cross(dy,normal),ry=cross(normal,dx);float determinant=dot(dx,rx);
-        float bumpStrength=mix(.1,.22,rock)*(1.0-snow*.78)*(1.0-smoothstep(25.0,95.0,dist));
-        normal=normalize(abs(determinant)*normal-sign(determinant)*bumpStrength*(dFdx(detailHeight)*rx+dFdy(detailHeight)*ry));
+        // per-material normal maps, blended with the same weights as the colours above
+        vec3 gN = mix(txn(tGGn, p), txn(tGDn, p), uDry);
+        gN = mix(gN, txn(tDirtN, p * 1.2), dirtK);
+        gN = mix(gN, txn(tGravN, p * 1.6), max(sh, shore));
+        gN = mix(gN, txn(tSnowN, p * .75), snow * (1.0 - rock));
+        float fadeN = 1.0 - smoothstep(70.0, 260.0, dist);           // detail fades out with distance so far slopes do not shimmer
+        gN.xy *= mix(1.0, 0.55, forest) * fadeN * (1.0 - uWet * 0.35);
+        vec3 wn = nn;
+        vec3 groundW = normalize(vec3(gN.x + wn.x, abs(gN.z) * wn.y, gN.y + wn.z));
+        vec3 nX = txn(tRockN, vWP.zy / 7.5), nY = txn(tRockN, vWP.xz / 7.5), nZ = txn(tRockN, vWP.xy / 7.5);
+        nX.xy *= fadeN * 1.25; nY.xy *= fadeN * 1.25; nZ.xy *= fadeN * 1.25;
+        nX = vec3(nX.xy + wn.zy, abs(nX.z) * wn.x); nY = vec3(nY.xy + wn.xz, abs(nY.z) * wn.y); nZ = vec3(nZ.xy + wn.xy, abs(nZ.z) * wn.z);
+        vec3 rockW = normalize(nX.zyx * blendWeight.x + nY.xzy * blendWeight.y + nZ.xyz * blendWeight.z);
+        vec3 worldN = normalize(mix(groundW, rockW, rock * (1.0 - snow * 0.6)));
+        normal = normalize((viewMatrix * vec4(worldN, 0.0)).xyz);
       `)
       .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = mix(.94,.86,rock); roughnessFactor = mix(roughnessFactor,.38,wet); roughnessFactor = mix(roughnessFactor,.76,snow*(1.0-rock));')
       .replace('#include <lights_fragment_end>', CLOUD_LIGHT);
   };
-  m.customProgramCacheKey = () => 'terrain-realism-v2' + (far ? 'F' : 'N');
+  m.customProgramCacheKey = () => 'terrain-realism-v3' + (far ? 'F' : 'N');
   return m;
 }
 const tGeo = new T.BufferGeometry();
@@ -569,7 +592,8 @@ function ribbon(R, w, yOff, vScale) {
   g.setIndex(idx); g.computeVertexNormals(); return g;
 }
 function roadMaterial(kind) {
-  const m = new T.MeshStandardMaterial({ roughness: 0.85, metalness: 0, polygonOffset: true, polygonOffsetFactor: kind === 'asp' ? -2 : -1, polygonOffsetUnits: kind === 'asp' ? -2 : -1 });
+  const m = new T.MeshStandardMaterial({ roughness: 0.85, metalness: 0, polygonOffset: true, polygonOffsetFactor: kind === 'asp' ? -2 : -1, polygonOffsetUnits: kind === 'asp' ? -2 : -1,
+    normalMap: kind === 'asp' ? TX.aspN : TX.dirtN, normalScale: new T.Vector2(kind === 'asp' ? 0.55 : 0.8, kind === 'asp' ? 0.55 : 0.8) });
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, U);
     sh.vertexShader = sh.vertexShader
@@ -1605,6 +1629,7 @@ addEventListener('keydown', (e) => {
   if(window.GOAXR?.active())return;
   if(window.GOAXR?.isOpen()){if(e.code==='Escape')window.GOAXR.close();return;}
   if (window.GOALocations?.isOpen()) { if(e.code==='Escape')window.GOALocations.close(); return; }
+  if (window.GOAWildlife?.isOpen()) { if(e.code==='Escape')window.GOAWildlife.close(); return; }
   if (window.GOAExtension?.isOpen()) { if(e.code==='Escape')window.GOAExtension.close(); return; }
   if (e.code === 'Escape') { if (mapOpen()) openMap(false); else openSettings(); e.preventDefault(); return; }
   if (e.code === 'KeyM' && mapOpen()) { openMap(false); return; }
@@ -2274,7 +2299,7 @@ function placeWheels(dt, inp, nvf, grip, pitch, roll) {
   }
 }
 function physics(dt) {
-  if ($('settings').classList.contains('open') || mapOpen() || window.GOAExtension?.isOpen() || window.GOALocations?.isOpen() || window.GOAXR?.isOpen() || $('board').style.display==='block' || window.GOADriveUI?.isOpen()) return {vf:0,speed:Math.hypot(S.vx,S.vz),sliding:false};
+  if ($('settings').classList.contains('open') || mapOpen() || window.GOAExtension?.isOpen() || window.GOALocations?.isOpen() || window.GOAWildlife?.isOpen() || window.GOAXR?.isOpen() || $('board').style.display==='block' || window.GOADriveUI?.isOpen()) return {vf:0,speed:Math.hypot(S.vx,S.vz),sliding:false};
   const pad = window.GOAController?.input() || {};
   const inp = S.ctrl && !$('settings').classList.contains('open') && !mapOpen() ? {
     g: Math.max(keys.g || 0, touch.g, pad.throttle || 0), b: Math.max(keys.b || 0, touch.b, pad.brake || 0), d: P.handbrake ? Math.max(keys.d || 0, touch.d, pad.handbrake || 0) : 0,
@@ -2859,7 +2884,7 @@ function frame(now,xrFrame) {
   window.GOAController?.poll(dt);
   if (S.started) {
     for (let i = 0; i < 2; i++) { const r = physics(dt / 2); if (r) st = r; }
-    if (S.ctrl && !$('settings').classList.contains('open') && !mapOpen() && !window.GOAExtension?.isOpen() && !window.GOALocations?.isOpen() && !window.GOAXR?.isOpen() && $('board').style.display!=='block' && !window.GOADriveUI?.isOpen()) S.lapT += dt;
+    if (S.ctrl && !$('settings').classList.contains('open') && !mapOpen() && !window.GOAExtension?.isOpen() && !window.GOALocations?.isOpen() && !window.GOAWildlife?.isOpen() && !window.GOAXR?.isOpen() && $('board').style.display!=='block' && !window.GOADriveUI?.isOpen()) S.lapT += dt;
     updateCamera(dt, false);
   } else {
     // a wide, quiet view over the valley toward the mountains, the car parked at the roadside
@@ -2882,6 +2907,7 @@ function frame(now,xrFrame) {
   const t2 = pf ? performance.now() : 0;
   updateEnv(dt, clockT);
   updateBirds(dt, clockT);
+  window.GOAWildlife?.frame(dt, clockT);
   fpsAcc.n++; fpsAcc.t += dt;
   if (fpsAcc.t > 0.75) {
     fpsAcc.last = fpsAcc.n / fpsAcc.t; fpsAcc.n = 0; fpsAcc.t = 0;
@@ -3000,11 +3026,11 @@ async function boot() {
   const cursor=document.createElement('div');cursor.id='controller-map-cursor';$('bigmap').append(cursor);bigC.tabIndex=0;bigC.setAttribute('aria-label','Map marker cursor. Move left stick, then A or Cross to set marker. D-pad moves to map controls.');
   let cursorX=.5,cursorY=.5;
   function mapCursor(){const r=bigC.getBoundingClientRect(),p=$('bigmap').getBoundingClientRect();cursor.style.left=(r.left-p.left+r.width*cursorX)+'px';cursor.style.top=(r.top-p.top+r.height*cursorY)+'px';cursor.style.display=mapOpen()?'block':'none';}
-  function currentScope(){if(window.GOADriveUI?.isOpen())return $('drive-menu');if(window.GOAXR.previewActive())return $('xr-overlay');if(window.GOAXR.isOpen())return $('xr-panel');if(window.GOALocations.isOpen())return $('destinations');if(window.GOAExtension.isOpen())return $('expedition');if($('board').style.display==='block')return $('board');if($('summary').style.display==='block')return $('summary');if(mapOpen())return $('bigmap');if($('settings').classList.contains('open'))return $('settings');if(!S.started)return $('title');if($('build').classList.contains('open'))return $('build');return null;}
+  function currentScope(){if(window.GOADriveUI?.isOpen())return $('drive-menu');if(window.GOAXR.previewActive())return $('xr-overlay');if(window.GOAXR.isOpen())return $('xr-panel');if(window.GOALocations.isOpen())return $('destinations');if(window.GOAWildlife?.isOpen())return $('journal');if(window.GOAExtension.isOpen())return $('expedition');if($('board').style.display==='block')return $('board');if($('summary').style.display==='block')return $('summary');if(mapOpen())return $('bigmap');if($('settings').classList.contains('open'))return $('settings');if(!S.started)return $('title');if($('build').classList.contains('open'))return $('build');return null;}
   window.GOAController.setHooks({scope:currentScope,
    pause(){if(S.started&&S.ctrl)openSettings(true);},
-   back(){const s=currentScope();if(s?.id==='drive-menu')window.GOADriveUI.close();else if(s?.id==='xr-overlay')window.GOAXR.end();else if(s?.id==='xr-panel')window.GOAXR.close();else if(s?.id==='destinations')window.GOALocations.close();else if(s?.id==='expedition')window.GOAExtension.close();else if(s?.id==='bigmap')openMap(false);else if(s?.id==='settings')openSettings(false);else if(s?.id==='board')$('board').style.display='none';else if(s?.id==='build')$('build').classList.remove('open');},
-   map(){window.GOAXR.close();window.GOALocations.close();window.GOAExtension.close();openSettings(false);openMap();mapCursor();},
+   back(){const s=currentScope();if(s?.id==='drive-menu')window.GOADriveUI.close();else if(s?.id==='xr-overlay')window.GOAXR.end();else if(s?.id==='xr-panel')window.GOAXR.close();else if(s?.id==='destinations')window.GOALocations.close();else if(s?.id==='journal')window.GOAWildlife.close();else if(s?.id==='expedition')window.GOAExtension.close();else if(s?.id==='bigmap')openMap(false);else if(s?.id==='settings')openSettings(false);else if(s?.id==='board')$('board').style.display='none';else if(s?.id==='build')$('build').classList.remove('open');},
+   map(){window.GOAXR.close();window.GOALocations.close();window.GOAWildlife?.close();window.GOAExtension.close();openSettings(false);openMap();mapCursor();},
    mapMove(x,y,dt){cursorX=clamp(cursorX+x*dt*.45,.02,.98);cursorY=clamp(cursorY+y*dt*.45,.02,.98);mapCursor();},
    mapPlace(){const x=(cursorX*bigC.width-bigView.ox)/bigView.s-TS/2,z=(cursorY*bigC.height-bigView.oy)/bigView.s-TS/2;if(Math.abs(x)<=TS/2&&Math.abs(z)<=TS/2){setMarker(x,z);drawBigMap();$('mkclear').disabled=false;$('mkgo').disabled=false;}},
    reset(){resetCar(false);},camera:cycleCam,
@@ -3016,8 +3042,9 @@ async function boot() {
    stop(){S.vx=S.vz=S.w=S.steer=S.vy=0;S.nitroOn=false;S.nitroFx=0;if(actx&&engineGain)engineGain.gain.setTargetAtTime(0,actx.currentTime,.1);if(actx&&windGain)windGain.gain.setTargetAtTime(.06*P.ambVol,actx.currentTime,.2);},
    restoreView(){updateCamera(0,true);queueMicrotask(()=>{if(!renderer.xr.isPresenting){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();applyPixelRatio();resizeUniforms();}});},openSettings,travel(id){window.GOALocations.travel(id);car.position.set(S.x,S.y,S.z);car.rotation.set(0,S.yaw,0);},
    snow(){return SV.snow;},vehicle(){return vehModel?.root;},treeModel(){return near3d.models.pine;},
-   tickVR(dt,time){updateEnv(dt,time);updateTreeRange();updateNear3D();updateGrass(S.x,S.z,false);updateBirds(dt,time);}
+   tickVR(dt,time){updateEnv(dt,time);updateTreeRange();updateNear3D();updateGrass(S.x,S.z,false);updateBirds(dt,time);window.GOAWildlife?.frame(dt,time);}
   });
+  try{window.GOAWildlife?.init({scene,camera,S,P,keys,WATER,groundY,terrainH,nearestRoad,toast,openSettings,openMap,snow(){return SV.snow;},viewPos(){return cameraWorldPosition();}});}catch(error){console.warn('Wildlife unavailable',error);}
   const requestedLocation=new URLSearchParams(location.search).get('location');
   if(window.GOALocations.list().some(p=>p.id===requestedLocation))window.GOALocations.travel(requestedLocation);
   renderer.setAnimationLoop(frame);
