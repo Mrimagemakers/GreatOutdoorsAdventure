@@ -290,194 +290,157 @@ function material() {
   return mat;
 }
 
-// ------------------------------------------------------------------ full-body models
-/* The men stand on rigged, sculpted bodies: the outdoorsman body (from the lumberjack model) for Marcus and Hank, and
-   the lean body (from the Blake model) for Jamal. Each keeps his own painted head and face, his own colours and the
-   same poses: our small rig is posed as before and its rotations are copied onto the model's skeleton every frame.
-   The women keep their built bodies. Until a model has loaded, the built body shows. */
-const SIDES = [['L', 'l', 'L'], ['R', 'r', 'R']];
-const MODELS = {
-  outdoorsman: {
-    url: 'assets/characters/outdoorsman.glb', armOut: 0.24, headScale: 1.08, neck: 1.5, curl: 0.42, hide: ['neck_02'], textured: true,
-    map: Object.assign({ hips: 'pelvis', spine: 'spine_02', chest: 'spine_04', neck: 'neck_01', head: 'head' },
-      ...SIDES.map(([o, t]) => ({ ['upperArm' + o]: 'upperarm_' + t, ['foreArm' + o]: 'lowerarm_' + t, ['hand' + o]: 'hand_' + t, ['thigh' + o]: 'thigh_' + t, ['shin' + o]: 'calf_' + t, ['foot' + o]: 'foot_' + t }))),
-  },
-  lean: {
-    url: 'assets/characters/lean-body.glb', armOut: 0.12, headScale: 1.0, neck: 1, curl: 0.15, hide: ['head'], textured: false,
-    map: Object.assign({ hips: 'hips', spine: 'Spine', chest: 'chest', neck: 'neck', head: 'head' },
-      ...SIDES.map(([o, , t]) => ({ ['upperArm' + o]: 'upper_arm_' + t, ['foreArm' + o]: 'lower_arm_' + t, ['hand' + o]: 'hand_' + t, ['thigh' + o]: 'upper_leg_' + t, ['shin' + o]: 'lower_leg_' + t, ['foot' + o]: 'foot_' + t }))),
-  },
-};
-const BODY = { hunter: 'outdoorsman', guide: 'outdoorsman', tracker: 'lean' };
-const ORDER = ['hips', 'spine', 'chest', 'neck', 'head', 'upperArmL', 'foreArmL', 'handL', 'upperArmR', 'foreArmR', 'handR', 'thighL', 'shinL', 'footL', 'thighR', 'shinR', 'footR'];
-const sources = new Map(), loaded = new Map(); // model key -> Promise<prepared source>, and the ones already in
-
-function loadModel(key) {
-  if (sources.has(key)) return sources.get(key);
-  const spec = MODELS[key];
-  const pr = new Promise((res, rej) => new T.GLTFLoader().load(spec.url, (g) => { try { const p = prepare(g.scene, spec); loaded.set(key, p); res(p); } catch (e) { rej(e); } }, undefined, rej));
-  pr.catch((e) => console.warn('[people] body model failed, keeping built body:', key, e && e.message));
-  sources.set(key, pr); return pr;
+// ------------------------------------------------------------------ full-body people
+/* Every character stands on a realistic, fully rigged body built from the MakeHuman base mesh (CC0): their own body
+   shape, face, skin, painted clothes, hair and eyes, with a 76-bone skeleton down to each finger joint
+   (assets/characters/<id>.glb). They move with motion capture: idle, walk and run clips from a Mixamo skeleton
+   (assets/characters/motion.glb) are retargeted onto each body every frame and blended with the game's own poses for
+   carrying, aiming, sitting and waving. Until the files arrive, the built body shows. */
+const MIX = { Hips: 'root', Spine: 'spine04', Spine1: 'spine03', Spine2: 'spine01', Neck: 'neck01', Head: 'head' };
+for (const [S, t] of [['Left', 'L'], ['Right', 'R']]) {
+  Object.assign(MIX, { [S + 'Shoulder']: 'clavicle_' + t, [S + 'Arm']: 'upperarm01_' + t, [S + 'ForeArm']: 'lowerarm01_' + t, [S + 'Hand']: 'wrist_' + t,
+    [S + 'UpLeg']: 'upperleg01_' + t, [S + 'Leg']: 'lowerleg01_' + t, [S + 'Foot']: 'foot_' + t });
+  ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky'].forEach((f, i) => { for (let j = 1; j <= 3; j++) MIX[`${S}Hand${f}${j}`] = `finger${i + 1}-${j}_${t}`; });
 }
-/** Merge the model's skinned parts into one mesh on one skeleton and drop the head (each man keeps his own). */
-function prepare(root, spec) {
-  root.updateMatrixWorld(true);
-  const skinned = []; root.traverse((o) => { if (o.isSkinnedMesh) skinned.push(o); });
-  const first = skinned[0], bones = first.skeleton.bones, inv0 = first.bindMatrix.clone().invert();
-  const hideSet = new Set();
-  for (const name of spec.hide) { const b = bones.find((x) => x.name === name); if (b) b.traverse((d) => { const i = bones.indexOf(d); if (i >= 0) hideSet.add(i); }); }
-  const pos = [], nor = [], uv = [], si = [], sw = [], idx = [];
-  const v = new T.Vector3(), n = new T.Vector3(), nm = new T.Matrix3();
-  for (const m of skinned) {
-    const g = m.geometry, P = g.attributes.position, N = g.attributes.normal, U = g.attributes.uv, J = g.attributes.skinIndex, W = g.attributes.skinWeight;
-    const xf = inv0.clone().multiply(m.bindMatrix); nm.getNormalMatrix(xf);
-    const remap = m.skeleton.bones.map((b) => bones.indexOf(b));
-    const base = pos.length / 3, hidden = new Uint8Array(P.count);
-    for (let i = 0; i < P.count; i++) {
-      v.fromBufferAttribute(P, i).applyMatrix4(xf); pos.push(v.x, v.y, v.z);
-      n.fromBufferAttribute(N, i).applyMatrix3(nm).normalize(); nor.push(n.x, n.y, n.z);
-      uv.push(U ? U.getX(i) : 0, U ? U.getY(i) : 0);
-      let hw = 0;
-      for (let k = 0; k < 4; k++) { const bi = remap[J.getComponent(i, k)], w = W.getComponent(i, k); si.push(Math.max(0, bi)); sw.push(w); if (hideSet.has(bi)) hw += w; }
-      hidden[i] = hw > 0.35 ? 1 : 0;
-    }
-    const I = g.index;
-    for (let t = 0; t < (I ? I.count : P.count); t += 3) {
-      const a = I ? I.getX(t) : t, b = I ? I.getX(t + 1) : t + 1, c = I ? I.getX(t + 2) : t + 2;
-      if (!hidden[a] && !hidden[b] && !hidden[c]) idx.push(base + a, base + b, base + c);
-    }
+// our pose rig -> body bones (used for carry, aim, sit and wave)
+const PROC = { hips: 'root', spine: 'spine04', chest: 'spine01', neck: 'neck01', head: 'head' };
+for (const t of ['L', 'R']) Object.assign(PROC, { ['upperArm' + t]: 'upperarm01_' + t, ['foreArm' + t]: 'lowerarm01_' + t, ['hand' + t]: 'wrist_' + t, ['thigh' + t]: 'upperleg01_' + t, ['shin' + t]: 'lowerleg01_' + t, ['foot' + t]: 'foot_' + t });
+// limb directions used to line both skeletons up in the same rest pose
+const AIM = [['clavicle', 'upperarm01'], ['upperarm01', 'lowerarm01'], ['lowerarm01', 'wrist'], ['upperleg01', 'lowerleg01'], ['lowerleg01', 'foot']];
+for (let f = 1; f <= 5; f++) AIM.push([`finger${f}-1`, `finger${f}-2`], [`finger${f}-2`, `finger${f}-3`]);
+const sources = new Map(), loaded = new Map();
+function loadGLB(url) {
+  if (sources.has(url)) return sources.get(url);
+  const pr = new Promise((res, rej) => new T.GLTFLoader().load(url, (g) => { loaded.set(url, g); res(g); }, undefined, rej));
+  pr.catch((e) => console.warn('[people] could not load', url, e && e.message));
+  sources.set(url, pr); return pr;
+}
+const MOTION = 'assets/characters/motion.glb', bodyUrl = (id) => `assets/characters/${id}.glb`;
+/** Copy a loaded glTF scene, re-binding skinned meshes to the copy's own bones. */
+function cloneScene(scene) {
+  const root = scene.clone(true), map = new Map(), a = [], b = [];
+  scene.traverse((o) => a.push(o)); root.traverse((o) => b.push(o)); a.forEach((o, i) => map.set(o, b[i]));
+  root.traverse((o) => { if (o.isSkinnedMesh) { const src = a[b.indexOf(o)]; o.bind(new T.Skeleton(src.skeleton.bones.map((x) => map.get(x)), src.skeleton.boneInverses), src.bindMatrix); } });
+  return root;
+}
+const byName = (root) => { const m = {}; root.traverse((o) => { if (o.isBone || o.type === 'Object3D' || o.isObject3D) m[o.name] = o; }); return m; };
+/** Hats, buns and braids from the built heads, sized to fit the real head. */
+function accessories(av, k) {
+  const parts = [], C = (h) => new T.Color(h);
+  const add = (g, col) => { g.computeVertexNormals(); const n = g.attributes.position.count, c = new Float32Array(n * 3), cc = C(col); for (let i = 0; i < n; i++) { c[i * 3] = cc.r; c[i * 3 + 1] = cc.g; c[i * 3 + 2] = cc.b; } g.setAttribute('color', new T.BufferAttribute(c, 3)); g.deleteAttribute('uv'); parts.push(g); };
+  if (av.hairStyle === 'bun') add(new T.SphereGeometry(0.048, 16, 12).translate(0, 0.1, -0.115), av.hair);
+  if (av.hairStyle === 'braid') { for (let i = 0; i < 7; i++) add(new T.SphereGeometry(0.03 - i * 0.0015, 10, 8).scale(1, 1.25, 0.9).translate(0, -0.0 - i * 0.05, -0.105 - i * 0.004), av.hair); }
+  if (av.hat === 'cap') {
+    add(new T.SphereGeometry(0.116, 20, 10, 0, Math.PI * 2, 0, Math.PI * 0.47).translate(0, 0.085, -0.004), av.hatCol);
+    add(new T.CylinderGeometry(0.078, 0.078, 0.01, 18, 1, false, -Math.PI * 0.5, Math.PI).scale(1, 1, 1.3).translate(0, 0.118, 0.098), av.hatCol);
+  } else if (av.hat === 'ranger' || av.hat === 'cowboy') {
+    const cow = av.hat === 'cowboy';
+    add(new T.CylinderGeometry(0.19, 0.2, 0.012, 48).scale(1, 1, cow ? 0.85 : 1).translate(0, 0.142, 0), av.hatCol);
+    add(new T.CylinderGeometry(cow ? 0.088 : 0.097, 0.114, cow ? 0.12 : 0.1, 40, 1).scale(1, 1, 0.92).translate(0, 0.198, 0), av.hatCol);
+    add(new T.CylinderGeometry(0.1155, 0.1155, 0.022, 40).scale(1, 1, 0.93).translate(0, 0.158, 0), cow ? '#3b2a1c' : '#4d3d24');
+  } else if (av.hat === 'beanie') {
+    add(new T.SphereGeometry(0.12, 22, 12, 0, Math.PI * 2, 0, Math.PI * 0.42).scale(1, 1.12, 1.02).translate(0, 0.092, -0.004), av.hatCol);
+    add(new T.SphereGeometry(0.03, 10, 8).translate(0, 0.212, 0), av.hatCol);
   }
-  const geo = new T.BufferGeometry();
-  geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); geo.setAttribute('normal', new T.Float32BufferAttribute(nor, 3));
-  geo.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
-  geo.setAttribute('skinIndex', new T.Uint16BufferAttribute(si, 4)); geo.setAttribute('skinWeight', new T.Float32BufferAttribute(sw, 4));
-  geo.setIndex(idx); geo.computeBoundingSphere();
-  for (const m of skinned) { if (m !== first) m.parent.remove(m); }
-  first.geometry = geo; first.name = 'body';
-  return { root, mesh: first, spec, material: first.material };
+  if (!parts.length) return null;
+  const geo = (T.mergeGeometries && T.mergeGeometries(parts)) || parts[0];
+  const m = new T.Mesh(geo, new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 })); m.castShadow = true; m.name = 'accessories';
+  return m;
 }
-/** Copy a prepared model: the scene graph, with the mesh re-bound to its own copy of the skeleton. */
-function cloneModel(src) {
-  const root = src.root.clone(true), map = new Map(), a = [], b = [];
-  src.root.traverse((o) => a.push(o)); root.traverse((o) => b.push(o)); a.forEach((o, i) => map.set(o, b[i]));
-  const mesh = map.get(src.mesh), sk = src.mesh.skeleton;
-  mesh.bind(new T.Skeleton(sk.bones.map((x) => map.get(x)), sk.boneInverses), src.mesh.bindMatrix);
-  const bone = {}; root.traverse((o) => { if (o.isBone) bone[o.name] = o; });
-  return { root, mesh, bone };
-}
-// ---- colours: the outdoorsman's texture is recoloured per man (shirt, trousers, skin); the lean body is painted per vertex
-const bodyTex = new Map();
-function recolor(src, av) {
-  if (bodyTex.has(av.id)) return bodyTex.get(av.id);
-  const img = src.material.map && src.material.map.image; if (!img) return null;
-  const W = img.width, H = img.height, c = document.createElement('canvas'); c.width = W; c.height = H;
-  const g = c.getContext('2d');
-  // which texels belong to the trousers: paint the UV triangles of leg-weighted vertices into a mask
-  if (!src.legMask) {
-    const geo = src.mesh.geometry, U = geo.attributes.uv, J = geo.attributes.skinIndex, Wt = geo.attributes.skinWeight, I = geo.index, bones = src.mesh.skeleton.bones;
-    const leg = new Uint8Array(U.count);
-    for (let i = 0; i < U.count; i++) { let best = 0, bw = -1; for (let k = 0; k < 4; k++) { const w = Wt.getComponent(i, k); if (w > bw) { bw = w; best = J.getComponent(i, k); } } leg[i] = /thigh|calf|knee|pelvis/i.test(bones[best].name) ? 1 : 0; }
-    g.fillStyle = '#000'; g.fillRect(0, 0, W, H); g.fillStyle = '#fff'; g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath();
-    for (let t = 0; t < I.count; t += 3) { const a = I.getX(t), b = I.getX(t + 1), e = I.getX(t + 2); if (leg[a] + leg[b] + leg[e] < 2) continue;
-      g.moveTo(U.getX(a) * W, U.getY(a) * H); g.lineTo(U.getX(b) * W, U.getY(b) * H); g.lineTo(U.getX(e) * W, U.getY(e) * H); g.closePath(); }
-    g.fill(); g.stroke(); const m = g.getImageData(0, 0, W, H).data; src.legMask = new Uint8Array(W * H); for (let i = 0; i < W * H; i++) src.legMask[i] = m[i * 4] > 127 ? 1 : 0;
-  }
-  g.drawImage(img, 0, 0); const d = g.getImageData(0, 0, W, H), px = d.data, mask = src.legMask;
-  const srgb = (h) => new T.Color(h).getRGB({}, T.SRGBColorSpace); // work in the texture's own sRGB values
-  const top = srgb(av.jacket || av.shirt), pants = srgb(av.pants), skin = srgb(av.skin), hsl = {}, tmp = new T.Color();
-  const sat = (x) => x < 0 ? 0 : x > 1 ? 1 : x;
-  for (let i = 0; i < px.length; i += 4) {
-    tmp.setRGB(px[i] / 255, px[i + 1] / 255, px[i + 2] / 255, T.SRGBColorSpace); tmp.getHSL(hsl, T.SRGBColorSpace);
-    const h = hsl.h * 360, L = hsl.l; let target = null, ref = 0.5, x = (i / 4) % W, y = (i / 4 / W) | 0;
-    if (h > 190 && h < 262 && hsl.s > 0.08 && L > 0.15) { if (mask[i / 4]) { target = pants; ref = 0.5; } else { target = top; ref = 0.52; } } // denim / plaid shirt
-    else if ((h < 38 || h > 335) && L > 0.45 && hsl.s > 0.25) { target = skin; ref = 0.68; } // skin
-    if (!target) continue;
-    let k = L / ref;
-    if (target === top && av.camo) { const n = Math.sin(x * 0.045 + y * 0.02) + Math.sin(y * 0.05 - x * 0.03) * 0.8 + Math.sin(x * 0.07 + y * 0.06) * 0.5; k *= n > 0.9 ? 0.62 : n < -0.8 ? 1.25 : 1; }
-    if (target === top && !av.plaid && !av.camo) k = 0.82 + (k - 0.82) * 0.4; // flatten the check on plain shirts
-    px[i] = sat(target.r * k) * 255; px[i + 1] = sat(target.g * k) * 255; px[i + 2] = sat(target.b * k) * 255;
-  }
-  g.putImageData(d, 0, 0);
-  const tex = new T.CanvasTexture(c); tex.flipY = false; tex.colorSpace = T.SRGBColorSpace; tex.anisotropy = 4;
-  bodyTex.set(av.id, tex); return tex;
-}
-function paintLean(geo, bones, av) {
-  const P = geo.attributes.position, J = geo.attributes.skinIndex, W = geo.attributes.skinWeight, n = P.count, col = new Float32Array(n * 3);
-  geo.computeBoundingBox(); const bb = geo.boundingBox, Hh = bb.max.y - bb.min.y, y0 = bb.min.y;
-  const top = av.jacket || av.shirt, topShade = av.camo ? camoTone : av.plaid ? plaidTone : null, c = new T.Color();
-  for (let i = 0; i < n; i++) {
-    let best = 0, bw = -1; for (let k = 0; k < 4; k++) { const w = W.getComponent(i, k); if (w > bw) { bw = w; best = J.getComponent(i, k); } }
-    const name = (bones[best] && bones[best].name || '').toLowerCase(), y = (P.getY(i) - y0) / Hh;
-    let hex = top, shade = topShade;
-    if (/hand|finger|thumb|index|middle|ring|pinky|neck|head|jaw|lip|eye|brow/.test(name)) { hex = av.skin; shade = null; }
-    else if (/foot|toe/.test(name) || y < 0.075) { hex = av.boots; shade = (cc) => { if (y < 0.012) cc.multiplyScalar(0.55); }; }
-    else if (/leg/.test(name) || (/hips|bone/.test(name) && y < 0.5)) { hex = av.pants; shade = av.camo && !av.jacket ? camoTone : null; }
-    c.set(hex); if (shade) shade(c, P.getX(i) * 0.8, P.getY(i) * 0.8, P.getZ(i) * 0.8);
-    col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
-  }
-  geo.setAttribute('color', new T.BufferAttribute(col, 3));
-}
-const leanGeo = new Map();
-/** Put a model body under the person: scale it to the man's height, straighten its arms to match our rest pose, graft his head. */
-function attachBody(person, src) {
-  const { av, rg, group } = person, spec = src.spec, mdl = cloneModel(src), q = new T.Quaternion(), v = new T.Vector3();
-  if (spec.textured) { const mat = src.material.clone(); const t = recolor(src, av); if (t) mat.map = t; mdl.mesh.material = mat; }
-  else { if (!leanGeo.has(av.id)) { const g = src.mesh.geometry.clone(); paintLean(g, src.mesh.skeleton.bones, av); leanGeo.set(av.id, g); } mdl.mesh.geometry = leanGeo.get(av.id); mdl.mesh.material = material(); }
-  mdl.mesh.castShadow = true; mdl.mesh.receiveShadow = true; mdl.mesh.frustumCulled = false;
-  const body = new T.Group(); body.name = 'body-model'; body.add(mdl.root);
-  // scale so the model's head joint sits where ours does
-  const tb = {}; for (const k of ORDER) tb[k] = mdl.bone[spec.map[k]];
-  mdl.root.updateMatrixWorld(true);
-  const ourHead = rg.k * 1.59, theirHead = tb.head.getWorldPosition(v).y;
-  body.scale.setScalar(ourHead / theirHead);
-  // work in the person group's own frame: park the group at the origin while measuring
+/** Put the real body under the person and drive it from motion capture plus our pose rig. */
+function attachBody(person, gltf, motion) {
+  const { av, rg, group } = person;
+  const model = cloneScene(gltf.scene), tb = byName(model);
+  const mesh = []; model.traverse((o) => { if (o.isSkinnedMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; mesh.push(o); } });
+  const ext = (model.getObjectByName('character') || model).userData || {};
+  // the motion rig: a hidden copy of the capture skeleton, scaled to the person
+  const src = cloneScene(motion.scene); src.visible = false; const sb = {};
+  src.traverse((o) => { const m = /(?:mixamorig:?)?([A-Za-z0-9]+)$/.exec(o.name); if (m && MIX[m[1]]) sb[m[1]] = o; });
+  const mixer = new T.AnimationMixer(src), clip = (n) => motion.animations.find((c) => c.name.toLowerCase() === n);
+  const act = {}; for (const n of ['idle', 'walk', 'run']) { const c = clip(n); if (c) { act[n] = mixer.clipAction(c); act[n].play(); act[n].setEffectiveWeight(n === 'idle' ? 1 : 0); } }
+  // measure in the person's own frame
   const save = { p: group.position.clone(), q: group.quaternion.clone(), s: group.scale.clone(), parent: group.parent };
   if (save.parent) save.parent.remove(group); group.position.set(0, 0, 0); group.quaternion.identity(); group.scale.set(1, 1, 1);
-  group.add(body); group.updateMatrixWorld(true);
-  // straighten the A-pose arms toward our rest (hanging, a little out from the body)
-  const wp = (o) => o.getWorldPosition(new T.Vector3()), wq = (o) => o.getWorldQuaternion(new T.Quaternion());
+  group.add(model); group.add(src);
+  src.updateMatrixWorld(true);
+  const srcBox = new T.Box3().setFromObject(src); src.scale.multiplyScalar(av.height / Math.max(0.5, srcBox.max.y - srcBox.min.y || 1.8));
+  group.updateMatrixWorld(true);
+  const wq = (o) => o.getWorldQuaternion(new T.Quaternion()), wp = (o) => o.getWorldPosition(new T.Vector3());
   const setWorldQ = (bone, Q) => { const pq = wq(bone.parent); bone.quaternion.copy(pq.invert().multiply(Q)); bone.updateMatrixWorld(true); };
-  for (const [s, sx] of [['L', 1], ['R', -1]]) {
-    const want = new T.Vector3(sx * Math.sin(spec.armOut), -Math.cos(spec.armOut), 0);
-    for (const [a, b] of [['upperArm' + s, 'foreArm' + s], ['foreArm' + s, 'hand' + s]]) {
-      const dir = wp(tb[b]).sub(wp(tb[a])).normalize();
-      setWorldQ(tb[a], new T.Quaternion().setFromUnitVectors(dir, want).multiply(wq(tb[a])));
-    }
+  const bind = {}; model.traverse((o) => { if (o.isBone) bind[o.name] = o.quaternion.clone(); });
+  const resetBind = () => { model.traverse((o) => { if (o.isBone && bind[o.name]) o.quaternion.copy(bind[o.name]); }); model.updateMatrixWorld(true); };
+  // rest pose matching the capture skeleton (T-pose)
+  const srcN = {}; for (const [m, t] of Object.entries(MIX)) if (sb[m] && tb[t]) srcN[t] = sb[m];
+  const srcFor = (tName) => srcN[tName];
+  for (const sd of ['L', 'R']) for (const [a, b] of AIM) {
+    const ta = tb[`${a}_${sd}`], tc = tb[`${b}_${sd}`], sa = srcFor(`${a}_${sd}`), sc = srcFor(`${b}_${sd}`);
+    if (!ta || !tc || !sa || !sc) continue;
+    const want = wp(sc).sub(wp(sa)).normalize(), have = wp(tc).sub(wp(ta)).normalize();
+    setWorldQ(ta, new T.Quaternion().setFromUnitVectors(have, want).multiply(wq(ta)));
   }
-  // relax the fingers into a loose grip (the models come with flat, spread hands)
-  const zAxis = new T.Vector3(0, 0, 1); const fingers = []; mdl.root.traverse((o) => { if (o.isBone && /^(index|middle|ring|pinky)/i.test(o.name)) fingers.push(o); });
-  for (const f of fingers) { const sx = wp(f).x > 0 ? 1 : -1; setWorldQ(f, new T.Quaternion().setFromAxisAngle(zAxis, -sx * spec.curl).multiply(wq(f))); }
-  const rest = {}; for (const k of ORDER) rest[k] = wq(tb[k]);
-  const hipsRest = wp(tb.hips), hipsRatio = hipsRest.y / (0.96 * rg.k);
-  // graft his own head and neck onto the model's head joint
-  const hg = buildGeometry(av, rig(av), new Set(['head', 'neck']), spec.neck);
-  const head = new T.Mesh(hg, materials(av)); head.castShadow = true; head.name = 'head';
-  const ref = rig(av); ref.root.updateMatrixWorld(true); const ourHeadPos = ref.bones.head.getWorldPosition(new T.Vector3());
-  head.position.copy(ourHeadPos).multiplyScalar(-spec.headScale); head.scale.setScalar(spec.headScale);
-  const holder = new T.Group(); holder.add(head);
-  const hm = tb.head.matrixWorld.clone().invert().multiply(new T.Matrix4().makeTranslation(wp(tb.head)));
-  hm.decompose(holder.position, holder.quaternion, holder.scale); tb.head.add(holder);
-  // restore the group where the game put it
+  const restM = {}, srcRest = {};
+  for (const [m, t] of Object.entries(MIX)) if (sb[m] && tb[t]) { restM[t] = wq(tb[t]); srcRest[t] = wq(sb[m]); }
+  const hipsRestS = wp(sb.Hips), hipsRestT = wp(tb.root);
+  // rest pose matching our pose rig (arms hanging a little out from the body)
+  resetBind();
+  for (const [sd, sx] of [['L', 1], ['R', -1]]) {
+    const want = new T.Vector3(sx * Math.sin(0.13), -Math.cos(0.13), 0);
+    for (const [a, b] of [['upperarm01', 'lowerarm01'], ['lowerarm01', 'wrist']]) { const ta = tb[`${a}_${sd}`], tc = tb[`${b}_${sd}`]; const have = wp(tc).sub(wp(ta)).normalize(); setWorldQ(ta, new T.Quaternion().setFromUnitVectors(have, want).multiply(wq(ta))); }
+    for (const [a, b] of [['upperleg01', 'lowerleg01'], ['lowerleg01', 'foot']]) { const ta = tb[`${a}_${sd}`], tc = tb[`${b}_${sd}`]; const have = wp(tc).sub(wp(ta)).normalize(); setWorldQ(ta, new T.Quaternion().setFromUnitVectors(have, new T.Vector3(sx * 0.03, -1, 0).normalize()).multiply(wq(ta))); }
+  }
+  const restP = {}; for (const t of Object.values(PROC)) if (tb[t]) restP[t] = wq(tb[t]);
+  // a relaxed hand: curl the fingers a little in the pose-rig rest
+  resetBind();
+  // hats and buns ride on the head joint, scaled to this head
+  const acc = accessories(av, rg.k);
+  if (acc && tb.head) {
+    const eyeC = new T.Vector3().fromArray(ext.eyeC || [0, av.height * 0.93, 0.08]);
+    const top = ext.headTop || eyeC.y + 0.11, fx = clamp((ext.headR || 0.085) / 0.093, 0.75, 1.15), fy = clamp((top - eyeC.y) / 0.098, 0.8, 1.3);
+    const brimmed = av.hat === 'ranger' || av.hat === 'cowboy', brim = brimmed ? 0.02 : 0.012; // brimmed hats sit down on the brow
+    const cen = new T.Vector3(0, top - (0.108 + brim) * fy, eyeC.z - 0.074 * fx);
+    const hs = brimmed ? 0.92 : av.hairStyle === 'bob' ? 1.12 : 1; acc.scale.set(fx * 1.04 * hs, fy * (brimmed ? 0.95 : 1), fx * 1.08 * hs); acc.position.copy(cen).sub(new T.Vector3(0, 0.068 * fy, 0.005 * fx)).sub(wp(tb.head));
+    tb.head.add(acc);
+  }
   group.position.copy(save.p); group.quaternion.copy(save.q); group.scale.copy(save.s); if (save.parent) save.parent.add(group);
-  person.proc.visible = false;
-  const gq = new T.Quaternion(), oq = new T.Quaternion(), pq = new T.Quaternion();
-  person.retarget = () => {
-    group.updateWorldMatrix(true, false); group.getWorldQuaternion(gq); const gi = gq.clone().invert();
-    rg.root.updateWorldMatrix(false, true);
-    // hips height (bob, sitting) carried over
-    const hp = rg.bones.hips.position, d = new T.Vector3(hp.x, hp.y - 0.96 * rg.k, hp.z).multiplyScalar(hipsRatio);
-    const want = group.localToWorld(hipsRest.clone().add(d)); tb.hips.parent.updateWorldMatrix(true, false); tb.hips.position.copy(tb.hips.parent.worldToLocal(want));
-    for (const k of ORDER) {
-      const ob = rg.bones[k], t = tb[k]; if (!t) continue;
-      ob.getWorldQuaternion(oq); const rel = gi.clone().multiply(oq); // our rotation from rest, in the person's frame
-      q.copy(gq).multiply(rel).multiply(rest[k]);
-      t.parent.updateWorldMatrix(true, false); t.parent.getWorldQuaternion(pq);
-      t.quaternion.copy(pq.invert().multiply(q)); t.updateMatrix(); t.updateWorldMatrix(false, false);
+  person.proc.visible = false; person.headBone = tb.head;
+  const ORDER_T = ['root', 'spine04', 'spine03', 'spine01', 'neck01', 'head'];
+  for (const sd of ['L', 'R']) { ORDER_T.push(`clavicle_${sd}`, `upperarm01_${sd}`, `lowerarm01_${sd}`, `wrist_${sd}`); for (let f = 1; f <= 5; f++) for (let j = 1; j <= 3; j++) ORDER_T.push(`finger${f}-${j}_${sd}`); ORDER_T.push(`upperleg01_${sd}`, `lowerleg01_${sd}`, `foot_${sd}`); }
+  const procOf = {}; for (const [o, t] of Object.entries(PROC)) procOf[t] = o;
+  const mixOf = {}; for (const [m, t] of Object.entries(MIX)) if (sb[m]) mixOf[t] = sb[m];
+  const gq = new T.Quaternion(), gi = new T.Quaternion(), q1 = new T.Quaternion(), q2 = new T.Quaternion(), pq = new T.Quaternion(), tmp = new T.Quaternion();
+  const armW = (n) => /^(clavicle|upperarm|lowerarm|wrist)/.test(n), legW = (n) => /^(upperleg|lowerleg|foot)/.test(n), spineW = (n) => /^(root|spine|neck|head)/.test(n);
+  let walkT = 0;
+  person.retarget = (st, dt) => {
+    // motion capture: idle -> walk -> run by speed, kept in step
+    const sp = st.speed || 0, wWalk = clamp((sp - 0.15) / 0.9, 0, 1) * (1 - clamp((sp - 2.4) / 1.4, 0, 1)), wRun = clamp((sp - 2.4) / 1.4, 0, 1), wIdle = 1 - Math.max(wWalk, wRun);
+    if (act.idle) act.idle.setEffectiveWeight(wIdle);
+    if (act.walk) { act.walk.setEffectiveWeight(wWalk); act.walk.setEffectiveTimeScale(clamp(sp / 1.25, 0.55, 1.7)); }
+    if (act.run) { act.run.setEffectiveWeight(wRun); act.run.setEffectiveTimeScale(clamp(sp / 3.6, 0.7, 1.5)); }
+    mixer.update(Math.min(dt || 0.016, 0.1));
+    if (act.walk && act.run) { const ph = act.walk.time / act.walk.getClip().duration; if (wRun > wWalk) act.walk.time = (act.run.time / act.run.getClip().duration) * act.walk.getClip().duration; else act.run.time = ph * act.run.getClip().duration; }
+    group.updateWorldMatrix(true, false); group.getWorldQuaternion(gq); gi.copy(gq).invert();
+    src.updateMatrixWorld(true); rg.root.updateWorldMatrix(false, true);
+    const wSit = st.sit || 0, wReady = Math.max(st.ready || 0, st.wave || 0, wSit), wAim = Math.max(st.aim || 0, wSit);
+    // hips: capture bob and sway, or our pose rig when sitting
+    const hs = wp(sb.Hips); group.worldToLocal(hs); const dM = hs.sub(group.worldToLocal(group.localToWorld(hipsRestS.clone()))); dM.x *= 0.5; dM.z = 0;
+    const hp = rg.bones.hips.position, dP = new T.Vector3(hp.x, hp.y - 0.96 * rg.k, hp.z);
+    const want = hipsRestT.clone().add(dM.multiplyScalar(1 - wSit)).add(dP.multiplyScalar(wSit));
+    tb.root.parent.updateWorldMatrix(true, false); tb.root.position.copy(tb.root.parent.worldToLocal(group.localToWorld(want)));
+    for (const t of ORDER_T) {
+      const bone = tb[t]; if (!bone) continue;
+      const s = mixOf[t], o = procOf[t];
+      let w = armW(t) ? wReady : legW(t) ? wSit : spineW(t) ? Math.max(wAim, wReady * 0.85) : 0;
+      if (/^finger/.test(t)) w = 0;
+      if (s) { s.getWorldQuaternion(q1); q1.premultiply(gi).multiply(tmp.copy(srcRest[t]).invert()).multiply(restM[t]); } // capture rotation from its rest, onto ours
+      else q1.copy(restM[t] || bind[t] || bone.quaternion);
+      if (o && w > 0.001) { rg.bones[o].getWorldQuaternion(q2); q2.premultiply(gi).multiply(restP[t]); q1.slerp(q2, w); }
+      q1.premultiply(gq);
+      bone.parent.updateWorldMatrix(true, false); bone.parent.getWorldQuaternion(pq);
+      bone.quaternion.copy(pq.invert().multiply(q1)); bone.updateMatrix(); bone.updateWorldMatrix(false, false);
     }
   };
-  person.retarget();
+  person.retarget(person.st || { speed: 0 }, 0.016);
 }
-
 /** Create a person. Returns { mesh, bones, avatar, pose(state, dt), attach(object, where) }. */
 function create(id) {
   T = window.THREE;
@@ -487,8 +450,9 @@ function create(id) {
   const proc = new T.SkinnedMesh(geoCache.get(av.id), materials(av)); proc.name = 'built-body';
   const mesh = new T.Group(); mesh.add(proc); mesh.add(rg.root); mesh.updateMatrixWorld(true); proc.bind(new T.Skeleton(rg.list));
   proc.castShadow = true; proc.receiveShadow = true; mesh.name = 'person-' + av.id;
-  const person = { av, rg, group: mesh, proc, retarget: null };
-  if (BODY[av.id]) { if (loaded.has(BODY[av.id])) attachBody(person, loaded.get(BODY[av.id])); else loadModel(BODY[av.id]).then((src) => attachBody(person, src)).catch(() => {}); }
+  const person = { av, rg, group: mesh, proc, retarget: null, headBone: null };
+  const go = () => { if (loaded.has(bodyUrl(av.id)) && loaded.has(MOTION) && !person.retarget) { try { attachBody(person, loaded.get(bodyUrl(av.id)), loaded.get(MOTION)); } catch (e) { console.warn('[people] body failed', av.id, e); } } };
+  go(); if (!person.retarget) Promise.all([loadGLB(bodyUrl(av.id)), loadGLB(MOTION)]).then(go).catch(() => {});
   const b = rg.bones;
   const st = { phase: Math.random(), aim: 0, ready: 0, sit: 0, wave: 0, run: 0, speed: 0, pitch: 0, recoil: 0, breathe: Math.random() * 6 };
   const holder = new T.Group(); holder.name = 'weapon-holder'; b.chest.add(holder);
@@ -533,15 +497,16 @@ function create(id) {
     holder.position.set(lerp3(-0.02, -0.11, st.aim) * rg.k, lerp3(0.0, 0.11, st.aim) * rg.k, lerp3(0.2, 0.12, st.aim) * rg.k);
     holder.rotation.set(lerp3(0.35, 0, st.aim) - st.recoil * 0.3, lerp3(0.95, -0.18, st.aim), lerp3(-0.4, 0, st.aim));
     holder.visible = st.ready > 0.15;
-    if (person.retarget) person.retarget();
+    if (person.retarget) person.retarget(st, dt);
   }
   const lerp3 = (a, c, t) => a + (c - a) * t;
   function attach(obj) { holder.clear(); if (obj) holder.add(obj); }
-  return { mesh, bones: b, avatar: av, pose, attach, holder, kick() { st.recoil = 1; }, state: st, get modelReady() { return !!person.retarget; } };
+  person.st = st;
+  return { mesh, get bones() { return person.headBone ? Object.assign({}, b, { head: person.headBone }) : b; }, avatar: av, pose, attach, holder, kick() { st.recoil = 1; }, state: st, get modelReady() { return !!person.retarget; } };
 }
 
 /** Start loading the body models (call early so portraits and companions get them). Resolves when all are in. */
-function preload() { T = window.THREE; return Promise.all([...new Set(Object.values(BODY))].map((k) => loadModel(k).catch(() => null))); }
-const usesModel = (id) => !!BODY[id];
+function preload(ids) { T = window.THREE; return Promise.all([MOTION, ...(ids || []).map(bodyUrl)].map((u) => loadGLB(u).catch(() => null))); }
+const usesModel = () => true;
 window.GOAPeople = { AVATARS, create, preload, usesModel };
 })();

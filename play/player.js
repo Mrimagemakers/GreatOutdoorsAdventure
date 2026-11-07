@@ -9,7 +9,7 @@ const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const damp = (a, b, k, dt) => a + (b - a) * (1 - Math.exp(-k * dt));
 const wrapA = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
 let T, api, person = null, weaponObj = null, avatarId = 'hunter';
-const P = { on: false, x: 0, y: 0, z: 0, yaw: 0, camYaw: 0, camPitch: -0.1, speed: 0, vx: 0, vz: 0, stamina: 1, health: 100, aim: 0,
+const P = { on: false, x: 0, y: 0, z: 0, vy: 0, air: false, swim: false, yaw: 0, camYaw: 0, camPitch: -0.1, speed: 0, vx: 0, vz: 0, stamina: 1, health: 100, aim: 0,
   slot: 0, mag: 0, reloadT: 0, fireT: 0, hurtT: 0, swingT: 0, kick: 0, scoped: false, wellFed: 0 };
 const AVATAR_KEY = 'goa-avatar-v1';
 try { avatarId = localStorage.getItem(AVATAR_KEY) || 'hunter'; } catch (e) { /* no storage */ }
@@ -117,8 +117,14 @@ function enterVehicle(force) {
 
 // ------------------------------------------------------------------ input
 const k = { f: 0, b: 0, l: 0, r: 0, run: 0, aim: 0, fire: 0, turnL: 0, turnR: 0 };
-let fireHeld = false, firePressed = false, aimHeld = false, padPrev = {};
+let fireHeld = false, firePressed = false, aimHeld = false, padPrev = {}, jumpPressed = false;
 const tin = { mx: 0, mz: 0, run: 0, aim: false, fire: false }; // on-screen stick and buttons (phones and tablets)
+/** Deep enough to swim, and where the game actually draws water (the valley lake and the River Valley river). */
+function deepWater(x, z) {
+  if (api.groundY(x, z) >= api.WATER - 0.9) return false;
+  if (Math.hypot(x, z) < 298) return true;
+  return z > -530 && z < -80 && Math.abs(x - (80 + Math.sin((z + 130) * 0.012) * 45)) < 19.5;
+}
 function inputBlocked() { return !!(api.panelsOpen?.() || window.GOAXR?.active?.()); }
 addEventListener('keydown', (e) => {
   if (e.target.closest?.('input,select,textarea')) return;
@@ -128,7 +134,7 @@ addEventListener('keydown', (e) => {
   if (c === 'KeyW' || c === 'ArrowUp') k.f = 1; if (c === 'KeyS' || c === 'ArrowDown') k.b = 1;
   if (c === 'KeyA') k.l = 1; if (c === 'KeyD') k.r = 1; if (c === 'ArrowLeft') k.turnL = 1; if (c === 'ArrowRight') k.turnR = 1;
   if (c === 'ShiftLeft' || c === 'ShiftRight') k.run = 1;
-  if (c === 'Space' && !e.repeat) { e.preventDefault(); firePressed = true; fireHeld = true; }
+  if (c === 'Space' && !e.repeat) { e.preventDefault(); jumpPressed = true; }
   if (c === 'KeyR' && !e.repeat) reload();
   if (c === 'KeyE' && !e.repeat) { e.preventDefault(); e.stopImmediatePropagation(); interact(); }
   if (c === 'KeyQ' && !e.repeat) { aimHeld = !aimHeld; }
@@ -138,7 +144,7 @@ addEventListener('keydown', (e) => {
 addEventListener('keyup', (e) => {
   const c = e.code;
   if (c === 'KeyW' || c === 'ArrowUp') k.f = 0; if (c === 'KeyS' || c === 'ArrowDown') k.b = 0; if (c === 'KeyA') k.l = 0; if (c === 'KeyD') k.r = 0;
-  if (c === 'ArrowLeft') k.turnL = 0; if (c === 'ArrowRight') k.turnR = 0; if (c === 'ShiftLeft' || c === 'ShiftRight') k.run = 0; if (c === 'Space') fireHeld = false;
+  if (c === 'ArrowLeft') k.turnL = 0; if (c === 'ArrowRight') k.turnR = 0; if (c === 'ShiftLeft' || c === 'ShiftRight') k.run = 0;
 });
 function canvasEl() { return api.renderer.domElement; }
 function bindMouse() {
@@ -166,7 +172,7 @@ const touchApi = {
   look(dx, dy) { if (!P.on) return; const s = 0.0055 * (P.scoped ? 0.3 : P.aim > 0.5 ? 0.6 : 1); P.camYaw -= dx * s; P.camPitch = clamp(P.camPitch - dy * s, -1.2, 0.9); },
   aim(on) { tin.aim = on === undefined ? !tin.aim : !!on; return tin.aim; },
   fire(down) { if (down && !tin.fire) firePressed = true; tin.fire = !!down; },
-  interact() { interact(); }, reload() { reload(); }, cycle(d = 1) { cycle(d); },
+  interact() { interact(); }, reload() { reload(); }, cycle(d = 1) { cycle(d); }, jump() { jumpPressed = true; },
   reset() { tin.mx = tin.mz = tin.run = 0; tin.fire = false; },
 };
 function pad(state, gp) {
@@ -176,7 +182,7 @@ function pad(state, gp) {
   padPrev.aim = (gp.buttons[6]?.value || 0) > 0.4; const fire = (gp.buttons[7]?.value || 0) > 0.5;
   if (fire && !padPrev.fire) firePressed = true; padPrev.fire = fire; fireHeld = fire || fireHeld && document.pointerLockElement;
   padPrev.run = !!gp.buttons[10]?.pressed || padPrev.run && Math.hypot(ax(0), ax(1)) > 0.3;
-  if (state.pressed[0]) interact(); if (state.pressed[2]) reload();
+  if (state.pressed[0]) { if (focus && !focus.global) interact(); else jumpPressed = true; } if (state.pressed[2]) reload();
   if (state.pressed[1]) melee(current() === 'hatchet' ? 'hatchet' : 'knife'); // B / ○: quick swing with whatever blade you carry
   if (state.pressed[12]) window.GOACampLife?.open?.(); // D-pad up: Adventure panel
   if (state.pressed[3] || state.pressed[14]) enterVehicle();
@@ -294,7 +300,7 @@ function hud() {
   el['fh-ammo'].textContent = st ? `${inv.mags[id] || 0} / ${st.mag}  ·  ${inv.ammo[st.family]} spare` : id === 'rod' ? (window.GOAFishing?.status?.() || '') : '';
   const L = (k2) => window.GOAController?.label?.(k2) || '', src = window.GOAController?.source?.() || 'kb';
   el['fh-tip'].textContent = src === 'kb'
-    ? (st ? 'Right mouse aim · Left click fire · R reload · Tab switch' : id === 'rod' ? 'Face water · Left click cast, click on the bite, hold to reel' : id === 'hatchet' ? 'Left click: chop deadfall for firewood, tag a harvest or fend off an attack · Tab switch' : 'Left click: tag a harvest or fend off an attack · Tab switch')
+    ? (st ? 'Right mouse aim · Left click fire · R reload · Space jump · Tab switch' : id === 'rod' ? 'Face water · Left click cast, click on the bite, hold to reel' : id === 'hatchet' ? 'Left click: chop deadfall for firewood, tag a harvest or fend off an attack · Tab switch' : 'Left click: tag a harvest or fend off an attack · Tab switch')
     : (st ? `${L('aim')} aim · ${L('fire')} fire · ${L('reload')} reload · ${L('switch')} switch · ${L('melee')} knife` : id === 'rod' ? `Face water · ${L('fire')} cast, ${L('fire')} on the bite, hold to reel` : `${L('fire')} ${id === 'hatchet' ? 'chop or swing' : 'swing'} · ${L('switch')} switch`);
   el['fh-hp'].style.width = P.health + '%'; el['fh-st'].style.width = P.stamina * 100 + '%';
 }
@@ -306,13 +312,15 @@ function update(dt) {
   const mx = blocked ? 0 : (k.r - k.l) + (padPrev.move?.[0] || 0) + tin.mx, mz = blocked ? 0 : (k.f - k.b) - (padPrev.move?.[1] || 0) + tin.mz;
   P.camYaw += ((k.turnL - k.turnR) * 1.9 - (padPrev.look?.[0] || 0) * 2.6 * (P.scoped ? 0.35 : 1)) * dt;
   P.camPitch = clamp(P.camPitch - (padPrev.look?.[1] || 0) * 1.8 * dt * (P.scoped ? 0.35 : 1), -1.2, 0.9);
-  const aiming = !blocked && (k.aim || aimHeld || padPrev.aim || tin.aim) && !!window.GOAWeapons.STATS[current()];
+  const aiming = !blocked && !P.swim && (k.aim || aimHeld || padPrev.aim || tin.aim) && !!window.GOAWeapons.STATS[current()];
   P.aim = damp(P.aim, aiming ? 1 : 0, 14, dt);
   const st = window.GOAWeapons.STATS[current()];
   P.scoped = aiming && P.aim > 0.8 && st && st.zoom > 2;
   const len = Math.min(1, Math.hypot(mx, mz));
   const sprint = (k.run || padPrev.run || tin.run) && !aiming && len > 0.2 && P.stamina > 0.05;
-  const maxSp = aiming ? 1.3 : sprint ? 5.6 : 2.4;
+  const swimming = deepWater(P.x, P.z);
+  P.swim = swimming;
+  const maxSp = swimming ? (sprint ? 1.9 : 1.2) : aiming ? 1.3 : sprint ? 5.6 : 2.4;
   P.stamina = clamp(P.stamina + (sprint ? -0.16 : 0.1 * (P.wellFed > 0 ? 1.6 : 1)) * dt, 0, 1);
   P.wellFed = Math.max(0, P.wellFed - dt);
   const needSlow = window.GOASurvival?.speedFactor?.() ?? 1;
@@ -323,24 +331,31 @@ function update(dt) {
   let nx = P.x + P.vx * dt, nz = P.z + P.vz * dt;
   const gyN = api.groundY(nx, nz), gy = api.groundY(P.x, P.z);
   const stepLen = Math.max(Math.hypot(nx - P.x, nz - P.z), 1e-3);
-  if (gyN < api.WATER - 0.35 || (gyN - gy) / stepLen > 1.6) { nx = P.x; nz = P.z; P.vx *= 0.2; P.vz *= 0.2; } // deep water or a cliff
+  // steep ground: scramble up slowly; only true cliffs stop you (a jump clears a low ledge); deep water means swimming
+  const slope = (gyN - gy) / stepLen;
+  if (slope > 2.8 && !(P.air && gyN < P.y + 0.35)) { nx = P.x; nz = P.z; P.vx *= 0.2; P.vz *= 0.2; }
+  else if (slope > 0.85 && !swimming) { const f = clamp(1 - (slope - 0.85) / 2.4, 0.28, 1); nx = P.x + (nx - P.x) * f; nz = P.z + (nz - P.z) * f; }
   // the vehicle is solid
   const cdx = nx - S.x, cdz = nz - S.z, cd = Math.hypot(cdx, cdz); if (cd < 1.7) { nx = S.x + cdx / cd * 1.7; nz = S.z + cdz / cd * 1.7; }
   P.x = clamp(nx, -1150, 1150); P.z = clamp(nz, -1150, 1150);
   P.speed = Math.hypot(P.vx, P.vz);
-  P.y = damp(P.y, Math.max(api.groundY(P.x, P.z), api.WATER - 0.5), 18, dt);
+  const floor = swimming ? api.WATER - 1.28 : api.groundY(P.x, P.z);
+  if (jumpPressed && !blocked && !P.air && !swimming && P.stamina > 0.08) { P.vy = 4.7; P.air = true; P.stamina = Math.max(0, P.stamina - 0.07); sound('click', 0.4); }
+  jumpPressed = false;
+  if (P.air) { P.vy -= 12.5 * dt; P.y += P.vy * dt; if (P.y <= floor) { P.y = floor; P.air = false; P.vy = 0; if (swimming) sound('reload', 0.3); } }
+  else P.y = damp(P.y, floor, swimming ? 6 : 18, dt);
   if (aiming) P.yaw = P.camYaw; else if (P.speed > 0.3) P.yaw += wrapA(Math.atan2(P.vx, P.vz) - P.yaw) * Math.min(1, dt * 10);
   P.fireT = Math.max(0, P.fireT - dt); P.kick = Math.max(0, P.kick - dt * 5); P.hurtT = Math.max(0, P.hurtT - dt); P.swingT = Math.max(0, P.swingT - dt);
   if (P.reloadT > 0) { P.reloadT -= dt; if (P.reloadT <= 0) { const id = current(), s2 = window.GOAWeapons.STATS[id]; if (s2) { const need = s2.mag - (inv.mags[id] || 0), take = Math.min(need, inv.ammo[s2.family]); inv.ammo[s2.family] -= take; inv.mags[id] = (inv.mags[id] || 0) + take; P.mag = inv.mags[id]; sound('reload'); } hud(); } }
-  if (firePressed && !blocked) { firePressed = false; fire(); hud(); } else firePressed = false;
+  if (firePressed && !blocked && !P.swim) { firePressed = false; fire(); hud(); } else firePressed = false;
   if (current() === 'rod') window.GOAFishing?.hold?.((fireHeld || tin.fire) && !blocked, dt);
   // avatar
   person.mesh.position.set(P.x, P.y, P.z); person.mesh.rotation.y = P.yaw;
-  person.pose({ speed: P.speed, mode: aiming ? 'aim' : (st || current() === 'rod') ? 'ready' : 'idle', pitch: aiming ? P.camPitch : 0 }, dt);
+  person.pose({ speed: P.swim ? Math.max(P.speed, 0.6) : P.speed, mode: P.swim ? 'idle' : aiming ? 'aim' : (st || current() === 'rod') ? 'ready' : 'idle', pitch: aiming ? P.camPitch : 0 }, dt);
   person.mesh.visible = !P.scoped;
   // camera: over the shoulder, closer when aiming, through the scope when zoomed
   const cam = api.camera;
-  const eyeY = P.y + 1.62 * (person.avatar.height / 1.78);
+  const eyeY = Math.max(P.y + 1.62 * (person.avatar.height / 1.78), P.swim ? api.WATER + 0.25 : -1e9);
   if (P.scoped) {
     cam.position.set(P.x, eyeY, P.z);
     cam.fov = damp(cam.fov, 58 / st.zoom, 18, dt);
@@ -362,7 +377,7 @@ function update(dt) {
   el['fh-hurt'].style.opacity = P.hurtT;
   focus = findFocus();
   el['fh-prompt'].textContent = focus ? `${window.GOAController?.label?.('interact') || 'E'}  ·  ${typeof focus.label === 'function' ? focus.label() : focus.label}` : '';
-  el['fh-prompt'].style.display = focus && !aiming && !(focus.global && P.speed > 1.2) ? 'block' : 'none';
+  el['fh-prompt'].style.display = focus && !aiming && !P.swim && !(focus.global && P.speed > 1.2) ? 'block' : 'none';
   hudT -= dt; if (hudT <= 0) { hudT = 0.25; hud(); }
 }
 let hudT = 0;
@@ -375,8 +390,9 @@ function updateXR(dt, input) {
   let wx = fx * input.mz + rx * input.mx, wz = fz * input.mz + rz * input.mx; const wl = Math.hypot(wx, wz); if (wl > 1) { wx /= wl; wz /= wl; }
   P.vx = damp(P.vx, wx * sp, 8, dt); P.vz = damp(P.vz, wz * sp, 8, dt);
   const nx = P.x + P.vx * dt, nz = P.z + P.vz * dt, gyN = api.groundY(nx, nz), gy = api.groundY(P.x, P.z);
-  if (!(gyN < api.WATER - 0.35 || (gyN - gy) / Math.max(Math.hypot(nx - P.x, nz - P.z), 1e-3) > 1.6)) { P.x = nx; P.z = nz; }
-  P.speed = Math.hypot(P.vx, P.vz); P.y = damp(P.y, Math.max(api.groundY(P.x, P.z), api.WATER - 0.5), 14, dt);
+  if ((gyN - gy) / Math.max(Math.hypot(nx - P.x, nz - P.z), 1e-3) <= 2.8) { P.x = nx; P.z = nz; }
+  P.swim = deepWater(P.x, P.z);
+  P.speed = Math.hypot(P.vx, P.vz); P.y = damp(P.y, P.swim ? api.WATER - 1.3 : api.groundY(P.x, P.z), 14, dt);
   P.fireT = Math.max(0, P.fireT - dt); P.stamina = clamp(P.stamina + (input.run && P.speed > 1 ? -0.12 : 0.1) * dt, 0, 1);
   if (P.reloadT > 0) { P.reloadT -= dt; if (P.reloadT <= 0) { const id = current(), s2 = window.GOAWeapons.STATS[id]; if (s2) { const take = Math.min(s2.mag - (inv.mags[id] || 0), inv.ammo[s2.family]); inv.ammo[s2.family] -= take; inv.mags[id] = (inv.mags[id] || 0) + take; } } }
   if (input.fire) fire(input.rayO, input.rayD);

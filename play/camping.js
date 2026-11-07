@@ -151,21 +151,7 @@ function nearestNpc() { const p = window.GOAPlayer.position(); return npcs.find(
 
 // ------------------------------------------------------------------ Adventure panel: mode, character, companions
 let panel = null;
-const portraits = {};
-function portrait(id) {
-  if (portraits[id]) return portraits[id];
-  try {
-    const r = new T.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); r.setSize(160, 200); r.outputColorSpace = T.SRGBColorSpace;
-    const sc = new T.Scene(); sc.add(new T.HemisphereLight('#f2f0e8', '#6a6050', 1.6)); const d = new T.DirectionalLight('#fff4e2', 2.2); d.position.set(1.5, 2, 3); sc.add(d);
-    const p = window.GOAPeople.create(id); p.mesh.rotation.y = 0.25; sc.add(p.mesh); p.pose({ speed: 0, mode: 'idle' }, 0.016);
-    p.mesh.updateMatrixWorld(true); const hp = p.bones.head.getWorldPosition(new T.Vector3()); // head-and-shoulders, so faces read
-    const cam = new T.PerspectiveCamera(24, 0.8, 0.05, 20); cam.position.set(hp.x + 0.12, hp.y + 0.02, hp.z + 1.25); cam.lookAt(hp.x, hp.y - 0.07, hp.z);
-    r.render(sc, cam); const url = r.domElement.toDataURL('image/png'); r.dispose(); r.forceContextLoss?.();
-    if (window.GOAPeople.usesModel?.(id) && !p.modelReady) return url; // body still loading: draw again next time
-    portraits[id] = url;
-  } catch (e) { portraits[id] = ''; }
-  return portraits[id];
-}
+function portrait(id) { return `assets/characters/portraits/${id}.webp`; } // rendered from each character's body model
 function buildPanel() {
   panel = document.createElement('div'); panel.id = 'adventure'; panel.className = 'sheet card'; panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'Adventure modes and characters');
   panel.innerHTML = `<div class="sethead"><b>ADVENTURE · MODES & CHARACTERS</b><button class="btn" id="adv-close">Close</button></div>

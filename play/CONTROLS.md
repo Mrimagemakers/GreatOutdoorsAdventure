@@ -48,7 +48,7 @@ The touch buttons appear automatically on phones and tablets (Settings › Touch
 
 **Driving.** Put your left thumb on the **steering pad** and slide it left or right: the further you slide, the harder you steer, and it centres when you let go. Hold the tall **GAS** pedal to drive and **BRAKE** to slow down (hold it when stopped to reverse). Tap **OUT** when stopped to walk. Settings › Touch › Touch steering switches to **arrow buttons** or **tilt** (hold the phone sideways like a wheel; tap **TILT** to centre it — iPhones ask for motion access on the first tap). Drift, Nitro and Ramp buttons can be turned on from the Menu.
 
-**On foot.** Touch anywhere on the left side and drag: a thumbstick appears under your thumb. Push it to the edge to sprint. Drag anywhere on the right side to look around. **FIRE** fires, casts or swings (and you can slide your thumb on it to keep tracking an animal). **AIM** toggles aiming and the scope. **USE** appears when there is something to do (tag, cook, talk, gather, drive) and shows what it will do. **⟳** reloads, **⇄** switches item and **CAR** gets back in the vehicle.
+**On foot.** Touch anywhere on the left side and drag: a thumbstick appears under your thumb. Push it to the edge to sprint. Drag anywhere on the right side to look around. **FIRE** fires, casts or swings (and you can slide your thumb on it to keep tracking an animal). **AIM** toggles aiming and the scope. **JUMP** jumps. **USE** appears when there is something to do (tag, cook, talk, gather, drive) and shows what it will do. **⟳** reloads, **⇄** switches item and **CAR** gets back in the vehicle.
 
 ## On foot
 
@@ -57,9 +57,10 @@ Stop and press **F** (controller: **Y / Triangle** or **D-pad Left**; phone: **O
 | Action | Keyboard & mouse | Xbox | PlayStation |
 | --- | --- | --- | --- |
 | Move / sprint | WASD or arrows / Shift | Left stick / L3 | Left stick / L3 |
+| Jump | Space | A (when there is nothing to interact with) | Cross (when there is nothing to interact with) |
 | Look | Mouse (click the game to capture it); arrows turn | Right stick | Right stick |
 | Aim (scope on scoped weapons) | Right mouse, or Q to toggle | LT | L2 |
-| Fire / cast / reel | Left mouse or Space (hold to reel) | RT | R2 |
+| Fire / cast / reel | Left mouse (hold to reel) | RT | R2 |
 | Reload | R | X | Square |
 | Interact (tag, cook, talk, open, gather, fill…) | E | A | Cross |
 | Switch weapon / rod / hatchet / knife | Tab, mouse wheel or 1–6 | LB / RB | L1 / R1 |
@@ -67,6 +68,10 @@ Stop and press **F** (controller: **Y / Triangle** or **D-pad Left**; phone: **O
 | Adventure panel | G | D-pad Up | D-pad Up |
 | Eat or drink | H | — | — |
 | Back to the vehicle | F | Y or D-pad Left | Triangle or D-pad Left |
+
+### Getting around on foot
+
+You can walk anywhere in the valley. Steep slopes slow you to a scramble instead of stopping you, so you can climb hillsides. Only sheer cliffs block you, and a jump clears a low ledge. Walk into the lake or the River Valley river and you swim, with your head above the water. You can't aim or fire while swimming. Sprint to swim faster.
 
 ## Hunting
 Walk slowly and animals let you close; running or driving gives you away. A gunshot sends everything nearby running. Chest and head hits count as vital. A downed animal lies on its side: walk up and press E to tag it. Tagging logs the harvest (with weight) in the Field Journal and gives meat for camp; a new animal appears out of sight later. A wounded bear may charge, so shoot or use your knife (left click) to drive it off. Weapons differ in range, spread, magazine, reload and zoom; shotgun slugs reach further than shot. Restock ammunition at your camp's supply box.

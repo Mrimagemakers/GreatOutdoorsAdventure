@@ -3071,7 +3071,7 @@ async function boot() {
    snow(){return SV.snow;},night(){return P.tod==='night';},viewPos(){return cameraWorldPosition();},snapCamera(){updateCamera(0,true);},
    setMarker(x,z){if(x===null||x===undefined)setMarker(null,0,true);else setMarker(x,z,true);},
    travel(id){if(window.GOAPlayer?.onFoot())window.GOAPlayer.enterVehicle(true);window.GOALocations.travel(id);car.position.set(S.x,S.y,S.z);car.rotation.set(0,S.yaw,0);updateCamera(0,true);}};
-  try{window.GOAPeople?.preload?.();}catch(error){console.warn('character bodies unavailable',error);}
+  try{let ids=[];try{ids=[localStorage.getItem('goa-avatar-v1')||'hunter',...JSON.parse(localStorage.getItem('goa-companions-v1')||'[]')];}catch{ids=['hunter'];}window.GOAPeople?.preload?.(ids.filter(Boolean));}catch(error){console.warn('character bodies unavailable',error);}
   for(const m of ['GOAPlayer','GOACampLife','GOAFishing','GOASurvival']){try{window[m]?.init(outdoorHooks);}catch(error){console.warn(m+' unavailable',error);}}
   const requestedLocation=new URLSearchParams(location.search).get('location');
   if(window.GOALocations.list().some(p=>p.id===requestedLocation))window.GOALocations.travel(requestedLocation);

@@ -23,7 +23,8 @@ foot.innerHTML = `
   <button class="ftb" id="ft-use" aria-label="Interact">USE</button>
   <button class="ftb sm" id="ft-reload" aria-label="Reload">⟳</button>
   <button class="ftb sm" id="ft-swap" aria-label="Switch item">⇄</button>
-  <button class="ftb sm" id="ft-car" aria-label="Get in the vehicle">CAR</button>`;
+  <button class="ftb sm" id="ft-car" aria-label="Get in the vehicle">CAR</button>
+  <button class="ftb sm" id="ft-jump" aria-label="Jump">JUMP</button>`;
 document.body.append(foot);
 
 // ------------------------------------------------------------------ helpers
@@ -110,6 +111,7 @@ hold($('ft-use'), () => { P()?.touch?.interact(); buzz(); });
 hold($('ft-reload'), () => { P()?.touch?.reload(); buzz(); });
 hold($('ft-swap'), () => { P()?.touch?.cycle(1); buzz(); });
 hold($('ft-car'), () => { P()?.enterVehicle?.(); buzz(20); });
+hold($('ft-jump'), () => { P()?.touch?.jump(); buzz(); });
 
 // ------------------------------------------------------------------ per-frame: labels and visibility
 let wasFoot = false;
