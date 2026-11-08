@@ -419,7 +419,7 @@ function setLoadout(weaponId, ammoId) {
 function setAvatar(id) { avatarId = id; try { localStorage.setItem(AVATAR_KEY, id); } catch (e) { /* no storage */ } spawnPerson(); if (person) person.mesh.visible = P.on; }
 
 window.GOAPlayer = {
-  init, update, updateXR, pad, touch: touchApi, fire, focusLabel: () => focus ? (typeof focus.label === 'function' ? focus.label() : focus.label) : '', exitVehicle, enterVehicle, hurt, addInteractable, setLoadout, setAvatar, equip, hud, sound, cycle,
+  init, update, updateXR, pad, touch: touchApi, fire, melee: (k) => melee(k || (current() === 'hatchet' ? 'hatchet' : 'knife')), focusLabel: () => focus ? (typeof focus.label === 'function' ? focus.label() : focus.label) : '', exitVehicle, enterVehicle, hurt, addInteractable, setLoadout, setAvatar, equip, hud, sound, cycle,
   onFoot: () => P.on, position: () => ({ x: P.x, y: P.y, z: P.z, speed: P.speed, yaw: P.yaw }), state: P, inv, TOOL_INFO,
   avatar: () => avatarId, current, teleport(x, z, yaw) { P.x = x; P.z = z; P.y = api.groundY(x, z); if (yaw !== undefined) { P.yaw = P.camYaw = yaw; } },
   feed(seconds) { P.wellFed = Math.max(P.wellFed, seconds); P.stamina = 1; }, heal(n) { P.health = Math.min(100, P.health + n); hud(); },

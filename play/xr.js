@@ -5,6 +5,7 @@
  // VR play and AR hunting state
  let comfort={smooth:false,vignette:true};try{Object.assign(comfort,JSON.parse(localStorage.getItem('goa-vr-comfort-v1')||'{}'));}catch{}
  let vignette=null,turnRate=0;
+ let padPrev=null,padRaw=null,padMode=false,padIdle=0,gazeDot=null,gazeHover=null;
  let vrPlay='look',prevBtn={},chaseYaw=0,rigYaw=0,seatOff=null,handWeapon=null,handItem='',wrist=null,wristT=0,driveIn=null,hunt=null;
  const controllers=[],clickable=[],$=id=>document.getElementById(id),point={x:0,y:0,z:0};
  const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
@@ -15,7 +16,7 @@
  function save(){snapshot={parent:api.camera.parent,position:api.camera.position.clone(),quaternion:api.camera.quaternion.clone(),near:api.camera.near,far:api.camera.far,fov:api.camera.fov,clearColor:api.renderer.getClearColor(new T.Color()),clearAlpha:api.renderer.getClearAlpha()};api.clearInput();api.stop();api.openSettings(false);panel(false);document.body.classList.add('xr-active');$('xr-overlay').classList.add('active');}
  function restore(){
   try{hitSource?.cancel();}catch{}hitSource=null;viewerSpace=localSpace=null;hitReady=false;placed=false;
-  if(vignette){api.camera.remove(vignette);dispose(vignette);vignette=null;}
+  if(vignette){api.camera.remove(vignette);dispose(vignette);vignette=null;}if(gazeDot){api.camera.remove(gazeDot);dispose(gazeDot);gazeDot=null;}if(padMode){padMode=false;if(wrist)wrist.scale.setScalar(1);}padPrev=null;
   if(rig){rig.remove(api.camera);if(snapshot?.parent)snapshot.parent.add(api.camera);api.scene.remove(rig);for(const c of controllers)rig.remove(c);if(menu){rig.remove(menu);dispose(menu);}rig=null;menu=null;clickable.length=0;}
   if(arScene){if(model){stage?.remove(model);dispose(model);}arScene.remove(stage,reticle);dispose(reticle);arScene=null;stage=model=reticle=previewCamera=null;}
   if(snapshot){api.camera.position.copy(snapshot.position);api.camera.quaternion.copy(snapshot.quaternion);api.camera.near=snapshot.near;api.camera.far=snapshot.far;api.camera.fov=snapshot.fov;api.camera.updateProjectionMatrix();api.renderer.setClearColor(snapshot.clearColor,snapshot.clearAlpha);snapshot=null;}
@@ -45,6 +46,7 @@
   const vb=button3D(vigLabel(),1.06,()=>{comfort.vignette=!comfort.vignette;saveComfort();vb.userData.relabel(vigLabel());});
   button3D('River Valley',.84,()=>viewpoint('river-valley'));button3D('Snowy Mountain',.62,()=>viewpoint('snowy-mountain'));button3D('Exit VR',.40,end);
   vignette=own(new T.Mesh(new T.RingGeometry(.15,.9,48,1),new T.MeshBasicMaterial({color:0x000000,transparent:true,opacity:0,depthTest:false,depthWrite:false})));vignette.position.z=-.3;vignette.renderOrder=999;vignette.visible=false;api.camera.add(vignette);
+  gazeDot=own(new T.Mesh(new T.RingGeometry(.006,.011,24),new T.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.85,depthTest:false})));gazeDot.position.z=-1;gazeDot.renderOrder=1000;gazeDot.visible=false;api.camera.add(gazeDot);
   wrist=makeWrist();
   for(const c of controllers){rig.add(c);c.visible=true;}
  }
@@ -85,7 +87,7 @@
    if(kind==='arhunt'){try{viewerSpace=await session.requestReferenceSpace('viewer');hitSource=await session.requestHitTestSource({space:viewerSpace});message('Hunt in AR: move slowly until the gold ring appears on the floor, then tap to release the animals.');}catch{hitSource=null;message('Surface detection is unavailable. Tap to release the animals a few steps ahead.');}session.addEventListener('select',huntSelect);}
    else if(kind==='vr'){setVRPlay('look');}
    if(kind==='ar'){try{viewerSpace=await session.requestReferenceSpace('viewer');hitSource=await session.requestHitTestSource({space:viewerSpace});message('Move your device slowly. Tap when a gold ring appears to place the tabletop.');}catch{hitSource=null;message('Surface detection is unavailable. Tap Place ahead to position the tabletop in front of you.');}session.addEventListener('select',()=>place(false));}
-   if(kind==='vr')message('VR: point at the menu and pull the trigger. Choose Drive or Walk & hunt. B/Y shows or hides the menu.');
+   if(kind==='vr')message('VR: point at the menu and pull the trigger, or with an Xbox / PlayStation controller look at a button and press A / ✕. Choose Drive or Walk & hunt. B, or Menu / Options on a pad, shows or hides the menu.');
   }catch(error){const failed=session;if(failed){try{await failed.end();}catch{}}if(snapshot)restore();else{session=null;mode='none';pending=false;}await probe();message(error?.name==='NotAllowedError'?'XR permission was declined. You can try again or use the tabletop preview.':'Could not start this XR mode. Check the headset/browser connection or use the tabletop preview.');}
   finally{pending=false;}
  }
@@ -93,8 +95,10 @@
   if(mode==='vr'&&vrPlay!=='look'){playFrame(dt,time);api.renderer.render(api.scene,api.camera);return;}
   if(mode==='arhunt'){huntFrame(dt,time,xrFrame);api.renderer.render(arScene,api.camera);return;}
   if(mode==='vr'){
-   const inp=readXR();if(edge('menuR',inp.right.b)){menu.visible=!menu.visible;}
-   api.tickVR(dt,time);let axis=0;for(const source of session?.inputSources||[]){const axes=source.gamepad?.axes;if(!axes)continue;const x=axes.length>2?axes[2]:axes[0];if(Math.abs(x)>Math.abs(axis))axis=x;}
+   const inp=readXR(),pad=readPad();if(edge('menuR',inp.right.b)||pad?.pressed[9]){menu.visible=!menu.visible;}
+   if(gazeDot)gazeDot.visible=padMode;
+   if(padMode&&menu.visible){const hit=gazePick(),m=hit?.object||null;if(m!==gazeHover){if(gazeHover)gazeHover.scale.setScalar(1);gazeHover=m;if(m)m.scale.setScalar(1.08);}if(m&&pad?.pressed[0]){m.userData.action?.();padRumble(.3,60);}}
+   api.tickVR(dt,time);let axis=pad?(pad.ax[2]||pad.ax[0]||0):0;for(const source of session?.inputSources||[]){const axes=source.gamepad?.axes;if(!axes)continue;const x=axes.length>2?axes[2]:axes[0];if(Math.abs(x)>Math.abs(axis))axis=x;}
    if(Math.abs(axis)>.65&&!snapHeld){rig.rotation.y-=Math.sign(axis)*Math.PI/6;snapHeld=true;}else if(Math.abs(axis)<.25)snapHeld=false;
    api.renderer.render(api.scene,api.camera);return;
   }
@@ -124,6 +128,30 @@
    out[h]={x:dz(ax.length>2?ax[2]:ax[0]),y:dz(ax.length>2?ax[3]:ax[1]),trig:g.buttons[0]?.value||0,grip:g.buttons[1]?.value||0,stick:!!g.buttons[3]?.pressed,a:!!g.buttons[4]?.pressed,b:!!g.buttons[5]?.pressed};}
   return out;}
  function edge(key,val){const was=!!prevBtn[key];prevBtn[key]=!!val;return !!val&&!was;}
+ /* Xbox and PlayStation controllers in VR. A paired Bluetooth or USB pad shows up through the ordinary Gamepad API
+    beside the headset's own controllers; the headset controllers (xr-standard) are left out here. While the pad is in
+    use, you aim and pick with your gaze (a dot in the middle of your view), the item sits in front of you, and the
+    wrist display moves to the bottom of your view. */
+ function readPad(){
+  const core=window.GOAControllerCore;if(!core||!navigator.getGamepads)return null;
+  let pads=[];try{pads=[...navigator.getGamepads()].filter(p=>p&&p.connected!==false&&p.mapping!=='xr-standard'&&!/oculus|openxr|quest|touch|vive|index|knuckles|wmr|windows mixed|pico|spatial/i.test(p.id||''));}catch{return null;}
+  if(!pads.length){padPrev=null;return null;}
+  const used=pads.find(p=>p.buttons.some(b=>b.pressed||b.value>.15)||p.axes.slice(0,6).some(a=>Math.abs(a)>.3));
+  const raw=used||pads.find(p=>p.index===padRaw?.index)||pads[0];padRaw=raw;
+  const st=core.sample(raw,padPrev||core.empty()),n=core.normalize(raw);padPrev=st;
+  st.ax=[0,1,2,3].map(i=>core.axis(n.axes?.[i]||0));st.trigR=st.throttle;st.trigL=st.brake;
+  if(used){padIdle=0;if(!padMode){padMode=true;onPadMode(true);}}else if(padMode&&(padIdle+=1/72)>20){padMode=false;onPadMode(false);}
+  return st;
+ }
+ function padRumble(k=.6,ms=110){try{const a=padRaw?.vibrationActuator;if(a?.playEffect)a.playEffect('dual-rumble',{duration:ms,strongMagnitude:k,weakMagnitude:k*.7}).catch(()=>{});}catch{}}
+ function onPadMode(on){
+  const fam=window.GOAControllerCore?.familyOf?.(padRaw?.id)||'';
+  if(on)message((fam==='ps'?'PlayStation':fam==='xbox'?'Xbox':'Game')+' controller ready in VR. Look at things to aim and choose; '+(fam==='ps'?'Options':'Menu')+' opens the menu.');
+  if(wrist){const cam=api.camera;if(on){cam.add(wrist);wrist.position.set(0,-.3,-.75);wrist.rotation.set(-.35,0,0);wrist.scale.setScalar(2.1);}else{hand('left').add(wrist);wrist.position.set(0,.06,.05);wrist.rotation.set(-1,0,0);wrist.scale.setScalar(1);}}
+  if(gazeDot)gazeDot.visible=on;updateHandItem(true);
+ }
+ function gazeRay(){const o=new T.Vector3(),d=new T.Vector3();api.camera.getWorldPosition(o);api.camera.getWorldDirection(d);return [o,d];}
+ function gazePick(){const [o,d]=gazeRay();return new T.Raycaster(o,d,0,6).intersectObjects(clickable,false)[0];}
  function hand(name){return controllers.find(c=>c.userData.hand===name)||controllers[name==='left'?0:1];}
  function setVRPlay(m){
   const P=api.player?.();vrPlay=m;menu.visible=m==='look';seatOff=null;
@@ -134,12 +162,18 @@
  }
  function headYaw(){const d=new T.Vector3();api.camera.getWorldDirection(d);return Math.atan2(d.x,d.z);}
  function playFrame(dt,time){
-  const inp=readXR(),S=api.S,P=api.player?.();
-  if(edge('menuR',inp.right.b))menu.visible=!menu.visible;
+  const inp=readXR(),S=api.S,P=api.player?.(),pad=readPad(),pp=(i)=>!!pad?.pressed[i];
+  if(edge('menuR',inp.right.b)||pp(9))menu.visible=!menu.visible;
+  // menu with a pad: look at a button and press A / Cross
+  if(gazeDot)gazeDot.visible=padMode;
+  if(menu.visible&&padMode){const hit=gazePick(),m=hit?.object||null;if(m!==gazeHover){if(gazeHover)gazeHover.scale.setScalar(1);gazeHover=m;if(m)m.scale.setScalar(1.08);}if(m&&pp(0)){m.userData.action?.();padRumble(.3,60);}}
+  else if(gazeHover){gazeHover.scale.setScalar(1);gazeHover=null;}
   const headH=floorSpace?1.35:0;
   if(vrPlay.startsWith('drive')){
    const st=Math.abs(inp.left.x)>=Math.abs(inp.right.x)?inp.left.x:inp.right.x;
-   driveIn=menu.visible?{throttle:0,brake:.5,steer:0,handbrake:0,nitro:0}:{throttle:Math.max(inp.right.trig,-Math.min(0,inp.right.y)),brake:Math.max(inp.left.trig,Math.max(0,inp.right.y)),steer:clamp(st,-1,1),handbrake:inp.right.grip>.55?1:0,nitro:inp.right.a?1:0};
+   const pst=pad&&Math.abs(pad.steer)>Math.abs(st)?pad.steer:st;
+   driveIn=menu.visible?{throttle:0,brake:.5,steer:0,handbrake:0,nitro:0}:{throttle:Math.max(inp.right.trig,-Math.min(0,inp.right.y),pad?.throttle||0),brake:Math.max(inp.left.trig,Math.max(0,inp.right.y),pad?.brake||0),steer:clamp(pst,-1,1),handbrake:Math.max(inp.right.grip>.55?1:0,pad?.handbrake||0),nitro:Math.max(inp.right.a?1:0,pad?.nitro||0)};
+   if(pad&&!menu.visible){if(pp(3)){if(Math.hypot(S.vx,S.vz)>1.5)message('Stop the vehicle to step out.');else return setVRPlay('walk');}if(pp(2))api.resetCar?.();if(pp(15))return setVRPlay(vrPlay==='drive-seat'?'drive-chase':'drive-seat');if(pp(8))seatOff=null;}
    if(edge('outY',inp.left.b)&&!menu.visible){if(Math.hypot(S.vx,S.vz)>1.5)message('Stop the vehicle to step out.');else return setVRPlay('walk');}
    api.physicsStep(dt);driveIn=null;
    if(edge('resetX',inp.left.a))api.resetCar?.();
@@ -157,11 +191,17 @@
   }else if(vrPlay==='walk'&&P){
    if(!P.onFoot()){setVRPlay('drive-seat');return;} // A on the "Drive" prompt put you in the truck
    turnRate=0;
-   if(comfort.smooth){if(Math.abs(inp.right.x)>.2){turnRate=inp.right.x*2.2;rigYaw-=turnRate*dt;}}
-   else if(Math.abs(inp.right.x)>.65&&!prevBtn.snap){rigYaw-=Math.sign(inp.right.x)*Math.PI/6;prevBtn.snap=true;}else if(Math.abs(inp.right.x)<.25)prevBtn.snap=false;
-   if(edge('sprint',inp.left.stick))prevBtn.sprintOn=!prevBtn.sprintOn;if(Math.hypot(inp.left.x,inp.left.y)<.2)prevBtn.sprintOn=false;
+   const tx=pad&&Math.abs(pad.ax[2])>Math.abs(inp.right.x)?pad.ax[2]:inp.right.x;
+   if(comfort.smooth){if(Math.abs(tx)>.2){turnRate=tx*2.2;rigYaw-=turnRate*dt;}}
+   else if(Math.abs(tx)>.65&&!prevBtn.snap){rigYaw-=Math.sign(tx)*Math.PI/6;prevBtn.snap=true;}else if(Math.abs(tx)<.25)prevBtn.snap=false;
+   const mx=Math.abs(pad?.ax[0]||0)>Math.abs(inp.left.x)?pad.ax[0]:inp.left.x,my=Math.abs(pad?.ax[1]||0)>Math.abs(inp.left.y)?pad.ax[1]:inp.left.y;
+   if(edge('sprint',inp.left.stick)||pp(10))prevBtn.sprintOn=!prevBtn.sprintOn;if(Math.hypot(mx,my)<.2)prevBtn.sprintOn=false;
+   if(pad&&!menu.visible){if(pp(3)){P.enterVehicle?.();}if(pp(1))P.melee?.();if(pp(5))P.cycle?.(1);if(pp(4))P.cycle?.(-1);}
    const rc=hand('right'),o=new T.Vector3(),d=new T.Vector3(0,0,-1);rc.updateWorldMatrix(true,false);o.setFromMatrixPosition(rc.matrixWorld);d.applyMatrix4(new T.Matrix4().extractRotation(rc.matrixWorld));
-   P.updateXR(dt,{mx:inp.left.x,mz:-inp.left.y,run:!!prevBtn.sprintOn,yaw:headYaw(),fire:!menu.visible&&edge('fire',inp.right.trig>.6),fireHeld:inp.right.trig>.5,interact:edge('interact',inp.right.a),reload:edge('reload',inp.left.a),cycle:edge('cycle',inp.left.b),rayO:o,rayD:d});
+   const padFire=!!pad&&!menu.visible&&edge('padFire',(pad.trigR||0)>.6);
+   if(padMode){const g=gazeRay();o.copy(g[0]);d.copy(g[1]);} // with a pad you aim where you look
+   if(padFire)padRumble(.6,110);
+   P.updateXR(dt,{mx,mz:-my,run:!!prevBtn.sprintOn,yaw:headYaw(),fire:!menu.visible&&(edge('fire',inp.right.trig>.6)||padFire),fireHeld:inp.right.trig>.5||(pad?.trigR||0)>.5,interact:edge('interact',inp.right.a)||(!menu.visible&&pp(0)),reload:edge('reload',inp.left.a)||pp(2),cycle:edge('cycle',inp.left.b),rayO:o,rayD:d});
    const ps=P.position();rig.position.set(ps.x,ps.y+(floorSpace?0:1.6),ps.z);rig.rotation.y=rigYaw;
    updateHandItem(false);
   }
@@ -175,7 +215,7 @@
   if(handWeapon){handWeapon.parent?.remove(handWeapon);handWeapon=null;}
   if(!item)return;
   handWeapon=window.GOAWeapons?.STATS[item]?window.GOAWeapons.build(item):item==='rod'?window.GOAFishing?.rodModel?.():null;
-  if(handWeapon){handWeapon.rotation.set(0,Math.PI,0);handWeapon.position.set(0,-.04,.12);hand('right').add(handWeapon);}
+  if(handWeapon){if(padMode){handWeapon.rotation.set(0,Math.PI,0);handWeapon.position.set(.16,-.2,-.32);api.camera.add(handWeapon);}else{handWeapon.rotation.set(0,Math.PI,0);handWeapon.position.set(0,-.04,.12);hand('right').add(handWeapon);}}
  }
  function makeWrist(){
   const c=document.createElement('canvas');c.width=512;c.height=256;const tex=new T.CanvasTexture(c);
@@ -185,12 +225,14 @@
  function drawWrist(){
   if(!wrist)return;const c=wrist.userData.canvas,g=c.getContext('2d'),P=api.player?.();g.clearRect(0,0,512,256);
   g.fillStyle='rgba(24,34,26,.85)';g.fillRect(0,0,512,256);g.fillStyle='#f0eddf';g.font='bold 34px sans-serif';
-  if(vrPlay.startsWith('drive')){g.fillText(`${Math.round(Math.hypot(api.S.vx,api.S.vz)*3.6)} km/h`,24,64);g.font='26px sans-serif';g.fillText('RT gas · LT brake · either stick steers',24,120);g.fillText('Grip handbrake · A nitro · X reset',24,160);g.fillText('Y step out · B menu',24,200);}
+  const ps=window.GOAControllerCore?.familyOf?.(padRaw?.id)==='ps';
+  if(vrPlay.startsWith('drive')&&padMode){g.fillText(`${Math.round(Math.hypot(api.S.vx,api.S.vz)*3.6)} km/h`,24,64);g.font='26px sans-serif';g.fillText(ps?'R2 gas · L2 brake · left stick steers':'RT gas · LT brake · left stick steers',24,120);g.fillText(ps?'✕ handbrake · ○ nitro · □ reset':'A handbrake · B nitro · X reset',24,160);g.fillText(ps?'△ step out · → view · Options menu':'Y step out · → view · Menu',24,200);}
+  else if(vrPlay.startsWith('drive')){g.fillText(`${Math.round(Math.hypot(api.S.vx,api.S.vz)*3.6)} km/h`,24,64);g.font='26px sans-serif';g.fillText('RT gas · LT brake · either stick steers',24,120);g.fillText('Grip handbrake · A nitro · X reset',24,160);g.fillText('Y step out · B menu',24,200);}
   else if(P){const id=P.current(),st=window.GOAWeapons?.STATS[id];g.fillText(st?(window.GOAExtension?.weaponName?.(id)||id):id==='rod'?'Fishing rod':'Hunting knife',24,56);
    g.font='28px sans-serif';g.fillText(st?`${P.inv.mags[id]||0}/${st.mag}  ·  ${P.inv.ammo[st.family]} spare`:id==='rod'?(window.GOAFishing?.status?.()||''):'',24,100);
    g.fillStyle='#e0644a';g.fillRect(24,122,P.state.health*4.4,14);
    const sv=window.GOASurvival?.state;if(window.GOASurvival?.active?.()){g.fillStyle='#d9b44a';g.fillRect(24,144,sv.hunger*4.4,10);g.fillStyle='#5fa8d8';g.fillRect(24,160,sv.thirst*4.4,10);g.fillStyle='#e08a4a';g.fillRect(24,176,sv.warmth*4.4,10);}
-   g.fillStyle='#ffd28a';g.font='26px sans-serif';const f=P.focusLabel();if(f)g.fillText('A: '+f,24,226);}
+   g.fillStyle='#ffd28a';g.font='26px sans-serif';const f=P.focusLabel();if(f)g.fillText((padMode&&window.GOAControllerCore?.familyOf?.(padRaw?.id)==='ps'?'✕: ':'A: ')+f,24,226);else if(padMode){g.fillStyle='#cfd8c8';g.font='22px sans-serif';g.fillText(window.GOAControllerCore?.familyOf?.(padRaw?.id)==='ps'?'R2 fire · □ reload · L1/R1 switch · △ drive':'RT fire · X reload · LB/RB switch · Y drive',24,226);}}
   wrist.userData.tex.needsUpdate=true;
  }
  // ---------------------------------------------------------------- AR hunting

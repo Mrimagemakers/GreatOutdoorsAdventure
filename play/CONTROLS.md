@@ -42,6 +42,10 @@ Wildlife: deer, elk, black bears, red foxes, hares and coyotes live around Long 
 
 Retexture: ground and roads now use a matching normal map per surface (grass, dry grass, dirt, gravel, rock, snow, asphalt, snowy asphalt), blended with the same weights as the colours; cliffs use triplanar rock normals. Dirt and snowy-road textures are Poly Haven CC0 sets. See CREDITS.html.
 
+## Controllers in VR
+
+Xbox and PlayStation controllers also work inside VR on your headset or VR PC. See `XR-GUIDE.md` for the button layout. You aim by looking.
+
 ## Phones and tablets
 
 The touch buttons appear automatically on phones and tablets (Settings › Touch can force them on or off, and make them smaller or larger). Landscape works best.

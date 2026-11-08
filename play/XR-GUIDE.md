@@ -2,6 +2,15 @@
 
 Open the game over HTTPS (the published site) or localhost. Choose **VR / AR** from the game toolbar or pause menu.
 
+## VR with an Xbox or PlayStation controller
+
+Pair an Xbox or PlayStation controller with your headset (Quest: Settings › Devices › Bluetooth) or your VR PC, then press any button once you're in VR. A message confirms it. You can keep using the headset controllers as well.
+
+- **Menu:** Menu / Options opens and closes the VR menu. Look at a button (a small dot marks the centre of your view) and press A / ✕.
+- **Driving:** RT / R2 is gas and LT / L2 is brake. The left stick steers. A / ✕ is the handbrake and B / ○ is nitro. X / □ puts the vehicle back on the road, and Y / △ steps out when you're stopped. D-pad Right switches between the driver seat and the chase view, and View / Share recentres the seat.
+- **On foot:** the left stick walks (click it to sprint) and the right stick turns. You aim where you look, and RT / R2 fires. A / ✕ interacts, X / □ reloads, LB / RB switches items, B / ○ swings the knife or hatchet, and Y / △ gets into the truck.
+- **Display:** your item is held in front of you, and the speed and ammo display moves to the bottom of your view. The controller rumbles when you fire.
+
 ## VR: drive, walk and hunt
 
 **Comfort.** The VR menu (B) has two switches, remembered on your headset: **Turning** (snap 30° or smooth) and **Comfort vignette**, which darkens the edges of your view while you walk, turn or swerve to reduce motion sickness. It is on by default.
