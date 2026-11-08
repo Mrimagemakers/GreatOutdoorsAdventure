@@ -85,6 +85,106 @@ function rig(spec, bull) {
   return { bones, list, root, H, L, R, W, up, lo, bull };
 }
 
+// ------------------------------------------------------------------ scanned-quality models
+/* Deer and elk use a realistic rigged, textured cervid model ("Realistic Deer 3D Model 2.0" by WildMesh 3D, CC BY 4.0).
+   Bulls carry its antlers (scaled down for white-tailed bucks); cows and does don't. Deer get a warmer, lighter coat.
+   The game's own gait (graze, walk, trot, bound, flee, fall) is copied onto its skeleton every frame. Other species,
+   and these two until the file arrives, use the sculpted bodies below. */
+const MODEL = {
+  url: 'assets/wildlife/cervid.glb', kinds: { elk: { antler: 1 }, deer: { antler: 0.62, recolor: true } },
+  map: { body: 'Pelvis', neck: 'Neck1', head: 'Head', tail: 'Tail1', hipFL: 'LegFL1', kneeFL: 'LegFL2', hipFR: 'LegFR1', kneeFR: 'LegFR2', hipHL: 'LegBL1', kneeHL: 'LegBL2', hipHR: 'LegBR1', kneeHR: 'LegBR2' },
+};
+const RT_ORDER = ['body', 'neck', 'head', 'tail', 'hipFL', 'kneeFL', 'hipFR', 'kneeFR', 'hipHL', 'kneeHL', 'hipHR', 'kneeHR'];
+let modelSrc = null, modelLoading = false;
+const modelTex = new Map();
+function loadModel() {
+  if (modelLoading || !T.GLTFLoader) return; modelLoading = true;
+  new T.GLTFLoader().load(MODEL.url, (g) => {
+    modelSrc = g;
+    for (const a of animals) if (MODEL.kinds[a.kind] && !a.model) attachModel(a);
+    for (const a of standaloneList) if (MODEL.kinds[a.kind] && !a.model) attachModel(a);
+  }, undefined, (e) => console.warn('[wildlife] model unavailable, keeping sculpted deer and elk', e && e.message));
+}
+const standaloneList = [];
+function cloneScene(scene) {
+  const root = scene.clone(true), a = [], b = [];
+  scene.traverse((o) => a.push(o)); root.traverse((o) => b.push(o));
+  root.traverse((o) => { if (o.isSkinnedMesh) { const src = a[b.indexOf(o)]; o.bind(new T.Skeleton(src.skeleton.bones.map((x) => b[a.indexOf(x)])), src.bindMatrix); } });
+  return root;
+}
+/** Deer coat from the elk texture: keep the fur detail, move the colours to tan-brown with a pale belly. */
+function deerTexture(map) {
+  if (modelTex.has('deer')) return modelTex.get('deer');
+  const img = map.image, c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+  const g = c.getContext('2d'); g.drawImage(img, 0, 0); const d = g.getImageData(0, 0, c.width, c.height), px = d.data;
+  const stops = [[0, [52, 38, 27]], [0.3, [118, 86, 58]], [0.55, [150, 112, 76]], [0.8, [196, 170, 140]], [1, [236, 228, 214]]];
+  for (let i = 0; i < px.length; i += 4) {
+    const L = Math.min(1, (0.3 * px[i] + 0.59 * px[i + 1] + 0.11 * px[i + 2]) / 255 * 1.08 + 0.06);
+    let k = 1; while (k < stops.length - 1 && stops[k][0] < L) k++;
+    const [l0, c0] = stops[k - 1], [l1, c1] = stops[k], t = (L - l0) / (l1 - l0);
+    for (let ch = 0; ch < 3; ch++) px[i + ch] = c0[ch] + (c1[ch] - c0[ch]) * t;
+  }
+  g.putImageData(d, 0, 0);
+  const tex = new T.CanvasTexture(c); tex.flipY = map.flipY; tex.colorSpace = T.SRGBColorSpace; tex.wrapS = map.wrapS; tex.wrapT = map.wrapT; tex.anisotropy = 4;
+  modelTex.set('deer', tex); return tex;
+}
+function attachModel(a) {
+  if (!modelSrc || a.model) return;
+  const cfg = MODEL.kinds[a.kind], mesh = a.mesh;
+  const model = cloneScene(modelSrc.scene), bone = {};
+  model.traverse((o) => {
+    const m = /^([A-Za-z]+[0-9]?[A-Za-z]*\d?)_\d+$/.exec(o.name); if (o.isBone && m) bone[m[1]] = o;
+    if (o.isMesh) {
+      o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false;
+      if (/Antler/i.test(o.name) || /Antler/i.test(o.parent?.name || '')) o.visible = !!a.bull;
+      else if (cfg.recolor && o.material?.map) { o.material = o.material.clone(); o.material.map = deerTexture(o.material.map); }
+    }
+  });
+  // white-tailed bucks: shrink the antler racks toward where they meet the skull
+  if (a.bull && cfg.antler !== 1 && bone.Head) {
+    model.updateMatrixWorld(true);
+    const hp = bone.Head.getWorldPosition(new T.Vector3());
+    for (const node of bone.Head.children.filter((c) => /Antler/i.test(c.name))) {
+      let best = 1e18; const base = new T.Vector3(), v = new T.Vector3();
+      node.traverse((m) => { if (!m.isMesh) return; const P = m.geometry.attributes.position;
+        for (let i = 0; i < P.count; i += 2) { v.fromBufferAttribute(P, i).applyMatrix4(m.matrixWorld); const dd = v.distanceToSquared(hp); if (dd < best) { best = dd; base.copy(v); } } });
+      bone.Head.worldToLocal(base); // the rack's root, in the head's own frame
+      node.position.sub(base).multiplyScalar(cfg.antler).add(base); node.scale.multiplyScalar(cfg.antler);
+    }
+  }
+  const holder = new T.Group(); holder.name = 'model'; holder.rotation.y = -Math.PI / 2; holder.add(model);
+  // size: the model's torso line (pelvis to chest, ~0.9 m up) to ours
+  model.updateMatrixWorld(true);
+  const pel = bone.Pelvis.getWorldPosition(new T.Vector3()), che = bone.Chest.getWorldPosition(new T.Vector3());
+  const k = a.rg.H / ((pel.y + che.y) / 2); holder.scale.setScalar(k);
+  const mid = pel.clone().add(che).multiplyScalar(0.5); // centre the torso over our body bone
+  holder.position.set(-mid.z * k, 0, mid.x * k);
+  // rest poses: ours from a fresh rig, the model's from its bind pose, both in the animal's own frame
+  const fresh = rig(a.spec, a.bull); fresh.root.updateMatrixWorld(true);
+  const restO = {}, restT = {}, tb = {};
+  for (const n of RT_ORDER) { const t = bone[MODEL.map[n]]; if (!t) continue; tb[n] = t; restO[n] = fresh.bones[n].getWorldQuaternion(new T.Quaternion()); }
+  mesh.add(holder); mesh.updateMatrixWorld(true);
+  const mq = mesh.getWorldQuaternion(new T.Quaternion()), mi = mq.clone().invert();
+  for (const n in tb) restT[n] = mi.clone().multiply(tb[n].getWorldQuaternion(new T.Quaternion()));
+  const baseY = holder.position.y, restBody = fresh.bones.body.position.clone();
+  a.model = holder; mesh.geometry = EMPTY || mesh.geometry;
+  const gq = new T.Quaternion(), gi = new T.Quaternion(), q = new T.Quaternion(), pq = new T.Quaternion(), d = new T.Quaternion(), ID_Q = new T.Quaternion();
+  a.retarget = () => {
+    if (!holder.parent) return;
+    mesh.updateWorldMatrix(true, false); a.rg.root.updateMatrixWorld(true); mesh.getWorldQuaternion(gq); gi.copy(gq).invert();
+    const bp = a.rg.bones.body.position; holder.position.y = baseY + (bp.y - restBody.y);
+    for (const n of RT_ORDER) {
+      const t = tb[n]; if (!t) continue;
+      a.rg.bones[n].getWorldQuaternion(q); d.copy(gi).multiply(q).multiply(pq.copy(restO[n]).invert()); // our rotation away from rest
+      if (n.startsWith('hip') || n.startsWith('knee')) d.slerp(ID_Q, 0.3); // this skeleton's longer legs need a softer swing
+      q.copy(gq).multiply(d).multiply(restT[n]);
+      t.parent.updateWorldMatrix(true, false); t.parent.getWorldQuaternion(pq);
+      t.quaternion.copy(pq.invert().multiply(q)); t.updateMatrix(); t.updateWorldMatrix(false, false);
+    }
+  };
+  a.retarget();
+}
+
 // ------------------------------------------------------------------ sculpted bodies
 /* Each animal is one smooth, continuous body: overlapping shapes (barrel, chest, haunches, muscled legs, neck, skull,
    muzzle, tail) are blended with a smooth union and meshed as a single surface, so the neck flows into the shoulders
@@ -347,17 +447,19 @@ function spawn(kind, x, z, home, herd) {
     EMPTY.setAttribute('skinWeight', new T.Float32BufferAttribute([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0], 4)); EMPTY.setIndex([0, 1, 2]); EMPTY.computeBoundingSphere();
   }
   const mesh = new T.SkinnedMesh(EMPTY, furMat);
-  geoFor(kind, bull, winter, (g) => { mesh.geometry = g; });
+  const holderA = {};
+  geoFor(kind, bull, winter, (g) => { if (!holderA.a?.model) mesh.geometry = g; });
   mesh.add(rg.root); mesh.updateMatrixWorld(true); mesh.bind(new T.Skeleton(rg.list));
   mesh.castShadow = true; mesh.receiveShadow = true; mesh.scale.setScalar(sc);
   mesh.name = 'wildlife-' + kind;
   api.scene.add(mesh);
   const a = {
-    kind, spec, mesh, rg, bull, sc, x, z, yaw: rnd() * Math.PI * 2, speed: 0, want: 0, state: 'graze', t: 2 + rnd() * 8,
+    kind, spec, mesh, rg, bull, sc, x, z, yaw: rnd() * Math.PI * 2, speed: 0, want: 0, state: 'graze', t: 2 + rnd() * 8, model: null, retarget: null,
     tx: x, tz: z, home, herd, phase: rnd(), chk: rnd() * 0.3, okAhead: true, fdx: 0, fdz: 1, hp: spec.hp * sc, wounded: false, downT: 0, roll: 0, atkT: 0, strikes: 0, graze: 1, alertK: 0, look: 0, vis: 0, logged: false, winter, key, hopY: 0, pitch: 0, flick: 0,
   };
   mesh.position.set(x, api.groundY(x, z), z); mesh.rotation.y = a.yaw;
-  animals.push(a);
+  animals.push(a); holderA.a = a;
+  if (MODEL.kinds[kind]) { if (modelSrc) attachModel(a); else loadModel(); }
   return a;
 }
 
@@ -472,7 +574,8 @@ function think(a, dt) {
   return dCar;
 }
 
-function pose(a, dt, time) {
+function pose(a, dt, time) { poseRig(a, dt, time); if (a.retarget) a.retarget(); }
+function poseRig(a, dt, time) {
   const { rg, spec } = a, b = rg.bones;
   const gy = a.ground || api.groundY;
   if (a.state === 'down') {
@@ -735,6 +838,8 @@ function makeAnimal(kind, opts = {}) {
   const sc = opts.scale || 1; mesh.scale.setScalar(sc);
   const a = { kind, spec, mesh, rg, bull, sc, x: opts.x || 0, z: opts.z || 0, yaw: opts.yaw || 0, speed: 0, want: 0, state: 'graze', t: 3, phase: Math.random(),
     graze: 1, alertK: 0, look: 0, flick: 0, pitch: 0, hp: spec.hp, roll: 0, downT: 0, ground: opts.ground || (() => 0), standalone: true };
+  if (MODEL.kinds[kind]) { if (!EMPTY) { EMPTY = new T.BufferGeometry(); EMPTY.setAttribute('position', new T.Float32BufferAttribute(new Float32Array(9), 3)); EMPTY.setAttribute('skinIndex', new T.Uint16BufferAttribute(new Uint16Array(12), 4)); EMPTY.setAttribute('skinWeight', new T.Float32BufferAttribute([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0], 4)); EMPTY.setAttribute('normal', new T.Float32BufferAttribute([0, 1, 0, 0, 1, 0, 0, 1, 0], 3)); EMPTY.setAttribute('color', new T.Float32BufferAttribute(new Float32Array(9), 3)); EMPTY.setIndex([0, 1, 2]); EMPTY.computeBoundingSphere(); }
+    standaloneList.push(a); if (modelSrc) attachModel(a); else loadModel(); }
   return { animal: a, pose: (dt, time) => pose(a, dt, time) };
 }
 function initMaterial() {

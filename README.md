@@ -5,6 +5,7 @@ A browser driving and wildlife game built with Three.js. Drive Long Valley, Rive
 **Play:** https://mrimagemakers.github.io/GreatOutdoorsAdventure/ (landing page) · [`/play/`](https://mrimagemakers.github.io/GreatOutdoorsAdventure/play/) (game)
 
 ## New: hunting, camping, fishing, Survival, VR and AR
+- **Wildlife:** deer and elk use a realistic rigged, textured model by WildMesh 3D (CC BY 4.0). Bears, foxes, rabbits and coyotes use sculpted procedural bodies with fur shading.
 - **Controls:** keyboard and mouse; Xbox and PlayStation controllers in any browser layout, with matching button prompts and rumble; phone and tablet touch controls (steering pad or tilt, tall pedals, on-foot thumbstick and look-drag); VR with snap or smooth turning and a comfort vignette. See `play/CONTROLS.md`.
 - **On foot:** stop and press **F** to step out as one of six characters (Adventure panel, **G**). Walk, sprint, look around, aim, fire, reload.
 - **Hunting:** seven weapons from the reference sheet, each with its own range, spread, magazine and scope. Stalk on foot, make vital shots, tag harvests (logged with weight in the journal), and deal with wounded bears.
