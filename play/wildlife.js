@@ -1,5 +1,5 @@
 /* Great Outdoors Adventure: wildlife.
-   Six North American species live around Long Valley, River Valley and Snowy Mountain. Each animal is one skinned mesh
+   Wildlife lives around Long Valley, River Valley and Snowy Mountain. Each procedural animal is one skinned mesh
    (a single draw call) built from simple shaded forms on a small skeleton, so dozens can share the valley cheaply.
    They graze, wander as herds, look up when a vehicle approaches and run when it gets close. Animals you watch for a
    moment are logged in the Field Journal, which is kept in this browser. */
@@ -64,7 +64,27 @@ const SPECIES = {
     walk: 1.3, run: 13, alert: 60, flee: 32, calm: 110, gait: 'trot', spot: 65, tailTip: true,
   },
 };
-const ORDER = ['deer', 'elk', 'bear', 'fox', 'rabbit', 'coyote'];
+SPECIES.wolf = {
+  ...SPECIES.coyote,
+  hp: 80, kg: [27, 55], name: 'Gray Wolf', latin: 'Canis lupus',
+  note: 'Travels in small packs along forest margins and ridges. Watch for broad shoulders and a long, low tail.',
+  habitat: 'Wooded slopes, mountain ridges', shoulder: 0.77, len: 0.91, bodyR: 0.21, bodyW: 0.88,
+  neckLen: 0.26, neckR: 0.115, headLen: 0.29, headR: 0.105, muzzle: 0.15, earLen: 0.12, legR: 0.042, tailLen: 0.49,
+  coat: '#746f67', coatWinter: '#9b978d', belly: '#c4b8a7', legs: '#695e51', face: '#8c8173', accent: '#393633',
+  walk: 1.45, run: 13.5, alert: 76, flee: 36, calm: 125, spot: 85,
+};
+SPECIES.boar = {
+  ...SPECIES.bear,
+  hp: 110, kg: [45, 125], name: 'Wild Boar', latin: 'Sus scrofa',
+  note: 'Roots for food in brush and damp ground. Look for a bristly back, short legs and curved tusks.',
+  habitat: 'Riverbank brush, woodland clearings', shoulder: 0.77, len: 0.85, bodyR: 0.29, bodyW: 0.73,
+  neckLen: 0.18, neckR: 0.14, neckUp: -0.2, headLen: 0.39, headR: 0.125, muzzle: 0.18,
+  ears: 'point', earLen: 0.13, tailLen: 0.13, legR: 0.047, feet: 'hoof',
+  shape: { chest: 0.28, tuck: 0.17, withers: 0.09 }, coat: '#493a30', coatWinter: '#56473b', belly: '#332820',
+  legs: '#302821', face: '#645244', accent: '#44372d', hump: false, tusks: true,
+  walk: 1.05, run: 9, alert: 53, flee: 29, calm: 96, gait: 'trot', spot: 68,
+};
+const ORDER = Object.keys(SPECIES);
 
 // ------------------------------------------------------------------ rigging: rigid parts skinned to a small skeleton
 function rig(spec, bull) {
@@ -362,6 +382,17 @@ function buildGeometry(spec, rg, winter) {
     else e = new T.ConeGeometry(spec.earLen * 0.42, spec.earLen, 14, 1, true).scale(1, 1, 0.45).rotateZ(sx * -0.55).translate(sx * (hr * 0.72 + spec.earLen * 0.2), hr * 0.72 + spec.earLen * 0.3, hl * 0.1);
     add(e, 'head', base === SPECIES.fox ? '#2a1d16' : base === SPECIES.bear ? coat : spec.face);
   }
+  if (spec.tusks) {
+    for (const side of [-1, 1]) {
+      const rootZ = hl * 0.45 + mz * 0.4;
+      const curve = new T.CatmullRomCurve3([
+        v3(side * hr * 0.66, -hr * 0.48, rootZ),
+        v3(side * hr * 0.94, -hr * 0.35, rootZ + 0.035),
+        v3(side * hr * 1.06, hr * 0.05, rootZ + 0.055),
+      ]);
+      add(new T.TubeGeometry(curve, 8, 0.012, 6, false), 'head', '#e2d3b4');
+    }
+  }
   if (rg.bull && spec.antlers) {
     const big = spec.antlers === 'elk', r0 = big ? 0.028 : 0.016, beam = big ? 0.95 : 0.42, tines = big ? 5 : 3, tc = '#d8c8a8';
     for (const sx of [1, -1]) {
@@ -468,13 +499,13 @@ function populate() {
   const at = (id) => places.find((p) => p.id === id);
   const plan = {
     'long-valley': [['deer', 4, 60, 150], ['coyote', 2, 90, 220], ['rabbit', 5, 18, 90], ['fox', 1, 40, 120], ['bear', 1, 160, 260]],
-    'river-valley': [['deer', 5, 45, 130], ['elk', 3, 110, 210], ['bear', 1, 70, 160], ['fox', 2, 30, 110], ['rabbit', 6, 15, 80]],
-    'snowy-mountain': [['elk', 4, 80, 190], ['coyote', 3, 60, 170], ['fox', 1, 35, 110], ['rabbit', 4, 15, 70]],
+    'river-valley': [['deer', 5, 45, 130], ['elk', 3, 110, 210], ['bear', 1, 70, 160], ['fox', 2, 30, 110], ['rabbit', 6, 15, 80], ['boar', 3, 45, 145]],
+    'snowy-mountain': [['elk', 4, 80, 190], ['coyote', 3, 60, 170], ['fox', 1, 35, 110], ['rabbit', 4, 15, 70], ['wolf', 3, 65, 155]],
   };
   for (const [id, groups] of Object.entries(plan)) {
     const p = at(id); if (!p) continue;
     for (const [kind, n, rMin, rMax] of groups) {
-      const herdy = kind === 'deer' || kind === 'elk' || kind === 'coyote';
+      const herdy = kind === 'deer' || kind === 'elk' || kind === 'coyote' || kind === 'wolf' || kind === 'boar';
       if (herdy) {
         const c = findSpot(p.x, p.z, rMin, rMax); if (!c) continue;
         const herd = { x: c[0], z: c[1] };
@@ -624,7 +655,7 @@ function poseRig(a, dt, time) {
   a.flick = damp(a.flick, alarm, 5, dt);
   // (positive x tips the tail up, negative lets it hang)
   if (spec.tail === 'flag') b.tail.rotation.x = -0.75 + a.flick * 1.9 + Math.sin(time * 9 + a.phase) * 0.05 * (1 - alarm);
-  else if (spec.tail === 'brush') b.tail.rotation.x = -(spec === SPECIES.coyote ? 0.75 : 0.45) + running * 0.35 + Math.sin(time * 2.1 + a.phase * 7) * 0.06;
+  else if (spec.tail === 'brush') b.tail.rotation.x = -(spec === SPECIES.coyote || spec === SPECIES.wolf ? 0.75 : 0.45) + running * 0.35 + Math.sin(time * 2.1 + a.phase * 7) * 0.06;
   else b.tail.rotation.x = Math.sin(time * 4 + a.phase * 11) * 0.12;
   // place on the ground, pitched to the slope
   const y = gy(a.x, a.z), half = rg.L * 0.5 * a.sc;
@@ -645,7 +676,7 @@ function record(a, dist) {
   j.where = placeName(a.x, a.z);
   saveJournal(); renderJournal();
   const count = ORDER.filter((k) => journal[k]?.seen).length;
-  api.toast(first ? `New species spotted: ${a.spec.name} · Field Journal ${count}/6` : `Spotted: ${a.spec.name}${a.bull ? ' (bull)' : ''}`, first ? 3.4 : 2);
+  api.toast(first ? `New species spotted: ${a.spec.name} · Field Journal ${count}/${ORDER.length}` : `Spotted: ${a.spec.name}${a.bull ? ' (bull)' : ''}`, first ? 3.4 : 2);
   updateBadge();
 }
 function placeName(x, z) {
@@ -653,7 +684,7 @@ function placeName(x, z) {
   for (const p of window.GOALocations?.list?.() || []) { const d = Math.hypot(p.x - x, p.z - z); if (d < bd) { bd = d; best = p.name; } }
   return best;
 }
-function updateBadge() { const el = $('wild-count'); if (el) el.textContent = `${ORDER.filter((k) => journal[k]?.seen).length}/6`; }
+function updateBadge() { const el = $('wild-count'); if (el) el.textContent = `${ORDER.filter((k) => journal[k]?.seen).length}/${ORDER.length}`; }
 
 let panel = null;
 function renderJournal() {
@@ -699,7 +730,7 @@ function buildPanel() {
   document.body.append(panel);
   $('journal-close').onclick = () => open(false);
   $('journal-reset').onclick = () => { journal = {}; saveJournal(); for (const a of animals) a.logged = false; renderJournal(); updateBadge(); };
-  const chip = document.createElement('button'); chip.className = 'chip'; chip.id = 'journalbtn'; chip.innerHTML = 'Wildlife <span id="wild-count">0/6</span>'; chip.onclick = () => open();
+  const chip = document.createElement('button'); chip.className = 'chip'; chip.id = 'journalbtn'; chip.innerHTML = `Wildlife <span id="wild-count">0/${ORDER.length}</span>`; chip.onclick = () => open();
   $('tools')?.prepend(chip);
   addEventListener('keydown', (e) => { if (e.code === 'KeyJ' && !e.repeat && !e.target.closest('input,select,textarea')) { e.preventDefault(); open(); } });
   updateBadge();
@@ -725,8 +756,8 @@ function frame(dt, time) {
   reskinT -= dt;
   if (reskinT <= 0) {
     reskinT = 2; const winter = api.snow() > 0.5;
-    for (const a of animals) if (a.winter !== winter && (a.kind === 'rabbit' || a.kind === 'deer' || a.kind === 'elk')) {
-      a.winter = winter; geoFor(a.kind, a.bull, winter, (g) => { if (a.winter === winter) a.mesh.geometry = g; });
+    for (const a of animals) if (!a.model && a.winter !== winter && (a.kind === 'rabbit' || MODEL.kinds[a.kind] || a.kind === 'wolf' || a.kind === 'boar')) {
+      a.winter = winter; geoFor(a.kind, a.bull, winter, (g) => { if (!a.model && a.winter === winter) a.mesh.geometry = g; });
     }
   }
   for (const a of animals) {
