@@ -111,12 +111,13 @@ function rig(spec, bull) {
    The game's own gait (graze, walk, trot, bound, flee, fall) is copied onto its skeleton every frame. Other species,
    and these two until the file arrives, use the sculpted bodies below. */
 const MODEL = {
-  url: 'assets/wildlife/cervid.glb', kinds: { elk: { antler: 1 }, deer: { antler: 0.62, recolor: true } },
+  url: 'assets/wildlife/cervid.glb', kinds: { elk: { antler: 1 }, deer: { antler: 0.62 } },
   map: { body: 'Pelvis', neck: 'Neck1', head: 'Head', tail: 'Tail1', hipFL: 'LegFL1', kneeFL: 'LegFL2', hipFR: 'LegFR1', kneeFR: 'LegFR2', hipHL: 'LegBL1', kneeHL: 'LegBL2', hipHR: 'LegBR1', kneeHR: 'LegBR2' },
 };
 const RT_ORDER = ['body', 'neck', 'head', 'tail', 'hipFL', 'kneeFL', 'hipFR', 'kneeFR', 'hipHL', 'kneeHL', 'hipHR', 'kneeHR'];
 let modelSrc = null, modelLoading = false;
-const modelTex = new Map();
+const modelTex = new WeakMap();
+const modelFur = new WeakMap();
 function loadModel() {
   if (modelLoading || !T.GLTFLoader) return; modelLoading = true;
   new T.GLTFLoader().load(MODEL.url, (g) => {
@@ -134,7 +135,7 @@ function cloneScene(scene) {
 }
 /** Deer coat from the elk texture: keep the fur detail, move the colours to tan-brown with a pale belly. */
 function deerTexture(map) {
-  if (modelTex.has('deer')) return modelTex.get('deer');
+  if (modelTex.has(map)) return modelTex.get(map);
   const img = map.image, c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
   const g = c.getContext('2d'); g.drawImage(img, 0, 0); const d = g.getImageData(0, 0, c.width, c.height), px = d.data;
   const stops = [[0, [52, 38, 27]], [0.3, [118, 86, 58]], [0.55, [150, 112, 76]], [0.8, [196, 170, 140]], [1, [236, 228, 214]]];
@@ -142,11 +143,22 @@ function deerTexture(map) {
     const L = Math.min(1, (0.3 * px[i] + 0.59 * px[i + 1] + 0.11 * px[i + 2]) / 255 * 1.08 + 0.06);
     let k = 1; while (k < stops.length - 1 && stops[k][0] < L) k++;
     const [l0, c0] = stops[k - 1], [l1, c1] = stops[k], t = (L - l0) / (l1 - l0);
-    for (let ch = 0; ch < 3; ch++) px[i + ch] = c0[ch] + (c1[ch] - c0[ch]) * t;
+    // Keep the source's warm and cool variation instead of flattening it to a single ramp.
+    for (let ch = 0; ch < 3; ch++) px[i + ch] = px[i + ch] * 0.18 + (c0[ch] + (c1[ch] - c0[ch]) * t) * 0.82;
   }
   g.putImageData(d, 0, 0);
-  const tex = new T.CanvasTexture(c); tex.flipY = map.flipY; tex.colorSpace = T.SRGBColorSpace; tex.wrapS = map.wrapS; tex.wrapT = map.wrapT; tex.anisotropy = 4;
-  modelTex.set('deer', tex); return tex;
+  const tex = new T.CanvasTexture(c);
+  tex.copy(map); tex.source = new T.Source(c); tex.anisotropy = Math.max(4, map.anisotropy); tex.needsUpdate = true;
+  modelTex.set(map, tex); return tex;
+}
+function scannedCoat(material, kind) {
+  let coats = modelFur.get(material);
+  if (!coats) modelFur.set(material, coats = {});
+  if (coats[kind]) return coats[kind];
+  const coat = material.clone();
+  if (kind === 'deer') coat.map = deerTexture(coat.map);
+  coat.roughness = Math.max(coat.roughness, 0.8);
+  return coats[kind] = applyFur(coat, true);
 }
 function attachModel(a) {
   if (!modelSrc || a.model) return;
@@ -157,7 +169,7 @@ function attachModel(a) {
     if (o.isMesh) {
       o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false;
       if (/Antler/i.test(o.name) || /Antler/i.test(o.parent?.name || '')) o.visible = !!a.bull;
-      else if (cfg.recolor && o.material?.map) { o.material = o.material.clone(); o.material.map = deerTexture(o.material.map); }
+      else if (o.isSkinnedMesh && o.material?.isMeshStandardMaterial && o.material.map) o.material = scannedCoat(o.material, a.kind);
     }
   });
   // white-tailed bucks: shrink the antler racks toward where they meet the skull
@@ -244,7 +256,9 @@ function buildGeometry(spec, rg, winter) {
   const sp = spec.shape || {}, chest = sp.chest ?? 0.22, tuck = sp.tuck ?? 0.22, withers = sp.withers ?? 0.08, rump = sp.rump ?? 0.05;
   const torsoCol = (c, x, y, z) => {
     c.copy(coatC);
-    if (y > R * 0.7) c.multiplyScalar(0.86);
+    const back = clamp((y / R - 0.1) / 0.85, 0, 1);
+    const saddle = base === SPECIES.wolf || base === SPECIES.boar ? 0.32 : base === SPECIES.rabbit && winter ? 0.08 : 0.18;
+    c.multiplyScalar(1 - saddle * back);
     if (y < -R * 0.45) c.lerp(belly, clamp((-R * 0.45 - y) / (R * 0.4), 0, 1));
     if (base === SPECIES.elk && z < -L * 0.42 && y > -R * 0.4) c.lerp(accent, 0.85);
     if (base === SPECIES.elk && z > L * 0.35) c.lerp(C(spec.neckCol || coat), clamp((z - L * 0.35) / (R * 0.6), 0, 1));
@@ -360,7 +374,7 @@ function buildGeometry(spec, rg, winter) {
     const p1 = prims[b1], p2 = prims[b2 >= 0 ? b2 : b1];
     p1.color(cA, ds[b1 * 4 + 1], ds[b1 * 4 + 2], ds[b1 * 4 + 3]); p2.color(cB, ds[b2 * 4 + 1], ds[b2 * 4 + 2], ds[b2 * 4 + 3]);
     const t = clamp(0.5 - (d2 - d1) / (p1.k * 0.9), 0, 0.5); cA.lerp(cB, t);
-    const grain = 0.94 + 0.08 * Math.sin(x * 61 + z * 47 + y * 29) * Math.sin(z * 23 - y * 37);
+    const grain = 0.96 + 0.06 * Math.sin(x * 19 + z * 11 + y * 17) * Math.sin(z * 17 - y * 13);
     col[v * 3] = cA.r * grain; col[v * 3 + 1] = cA.g * grain; col[v * 3 + 2] = cA.b * grain;
     const wb = new Map();
     for (let i = 0; i < prims.length; i++) { const w = Math.exp(-(ds[i * 4] - d1) / Math.max(prims[i].k * 0.45, 1e-4)); if (w > 0.02) wb.set(prims[i].bi, (wb.get(prims[i].bi) || 0) + w); }
@@ -874,8 +888,10 @@ function makeAnimal(kind, opts = {}) {
   return { animal: a, pose: (dt, time) => pose(a, dt, time) };
 }
 function initMaterial() {
-  furMat = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0 });
-  furMat.onBeforeCompile = (sh) => {
+  furMat = applyFur(new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0 }));
+}
+function applyFur(material, scanned = false) {
+  material.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vFurP;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvFurP = position;');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
 varying vec3 vFurP;
@@ -884,18 +900,25 @@ float fn(vec3 p){ vec3 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
   return mix(mix(mix(fh(i), fh(i+vec3(1,0,0)), f.x), mix(fh(i+vec3(0,1,0)), fh(i+vec3(1,1,0)), f.x), f.y),
              mix(mix(fh(i+vec3(0,0,1)), fh(i+vec3(1,0,1)), f.x), mix(fh(i+vec3(0,1,1)), fh(i+vec3(1,1,1)), f.x), f.y), f.z); }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
-  vec3 fp = vFurP * vec3(260.0, 260.0, 70.0);           // strands run along the body
-  float strand = fn(fp) * 0.6 + fn(fp * 2.3) * 0.4;
-  float furPatch = fn(vFurP * 9.0);
-  diffuseColor.rgb *= 0.8 + 0.32 * strand;
-  diffuseColor.rgb *= 0.93 + 0.14 * furPatch;`)
+  // The imported cervid's spine runs along X; the procedural rigs face +Z.
+  vec3 furP = ${scanned ? 'vFurP.zyx' : 'vFurP'};
+  vec3 furCell = (furP + vec3(furP.y * 0.22, furP.z * 0.12, 0.0)) * vec3(124.0, 145.0, 38.0);
+  float detail = 1.0 - smoothstep(0.3, 1.4, length(fwidth(furCell)));
+  float furClump = fn(furCell * 0.28) - 0.5;
+  float furStrand = (fn(furCell) - 0.5) * detail;
+  float coatCloud = fn(furP * 8.0) - 0.5;
+  float furRelief = furClump * 0.38 + furStrand * 0.62;
+  diffuseColor.rgb *= 1.0 + (coatCloud * 0.17 + furClump * 0.15 + furStrand * 0.20) * ${scanned ? '0.46' : '1.0'};`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
-  { vec3 q = vFurP * vec3(220.0, 220.0, 60.0); float e = 0.35;
-    vec3 g = vec3(fn(q + vec3(e,0,0)) - fn(q - vec3(e,0,0)), fn(q + vec3(0,e,0)) - fn(q - vec3(0,e,0)), fn(q + vec3(0,0,e)) - fn(q - vec3(0,0,e)));
-    normal = normalize(normal + (mat3(viewMatrix) * g) * 0.28); }`)
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\nfloat rimK = pow(1.0 - clamp(dot(normalize(vNormal), normalize(vViewPosition)), 0.0, 1.0), 2.5); totalEmissiveRadiance += diffuseColor.rgb * rimK * 0.3;');
+  // Use the posed surface derivatives so the relief follows moving animals.
+  vec3 furDX = dFdx(-vViewPosition), furDY = dFdy(-vViewPosition);
+  vec3 furR1 = cross(furDY, normal), furR2 = cross(normal, furDX);
+  float furDet = dot(furDX, furR1);
+  vec3 furSlope = (furR1 * dFdx(furRelief) + furR2 * dFdy(furRelief)) * sign(furDet) / max(abs(furDet), 1e-6);
+  normal = normalize(normal - furSlope * ${scanned ? '0.0012' : '0.0024'});`);
   };
-  furMat.customProgramCacheKey = () => 'wildlife-fur-2';
+  material.customProgramCacheKey = () => scanned ? 'wildlife-cervid-fur-3' : 'wildlife-procedural-fur-3';
+  return material;
 }
 
 window.GOAWildlife = { init, frame, open, isOpen, close() { open(false); }, species: SPECIES, animals, journal: () => journal,
