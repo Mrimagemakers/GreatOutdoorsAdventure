@@ -24,6 +24,17 @@ const AVATARS = [
     skin: '#e1b894', hair: '#1a1514', hairStyle: 'bob', hat: 'cap', hatCol: '#3d5a45', shirt: '#d9d2c2', jacket: '#b39a6f', pants: '#5b5d5a', boots: '#3b2f25', eye: '#3b2a1c', age: 27, build: 'f', height: 1.62 },
 ];
 
+// Outfit palettes and fabric cuts for the existing character bodies.
+const OUTFITS = {
+  hunter:       { jacket: '#515940', pants: '#625441', hatCol: '#d96624', fabric: 0 }, // waxed field jacket
+  ranger:       { jacket: '#285447', pants: '#625b46', hatCol: '#797057', fabric: 1 }, // ranger twill
+  guide:        { jacket: '#773331', pants: '#364b60', hatCol: '#6b5037', fabric: 2 }, // flannel and denim
+  camper:       { jacket: '#246e76', pants: '#7a6048', hatCol: '#ce963a', fabric: 3 }, // quilted camp jacket
+  tracker:      { jacket: '#515d48', pants: '#393d35',                   fabric: 4 }, // ripstop and cargo pants
+  photographer: { jacket: '#b08955', pants: '#414958', hatCol: '#4d5969', fabric: 5 }, // canvas field jacket
+};
+for (const avatar of AVATARS) Object.assign(avatar, OUTFITS[avatar.id]);
+
 let T = null, mat = null;
 const geoCache = new Map();
 
@@ -324,6 +335,71 @@ function cloneScene(scene) {
   return root;
 }
 const byName = (root) => { const m = {}; root.traverse((o) => { if (o.isBone || o.type === 'Object3D' || o.isObject3D) m[o.name] = o; }); return m; };
+const outfitMaterials = new WeakMap();
+function styleOutfit(mesh, av) {
+  const { geometry, material, skeleton } = mesh;
+  if (material.name !== 'skin' || !material.map) return;
+  if (!geometry.hasAttribute('outfitWeight')) {
+    const { position, skinIndex, skinWeight } = geometry.attributes;
+    const region = skeleton.bones.map(({ name }) => {
+      if (/^(spine|clavicle|upperarm|lowerarm)/i.test(name)) return 0;
+      if (/^(root|upperleg|lowerleg)/i.test(name)) return 1;
+      return -1;
+    });
+    const weights = new Float32Array(position.count * 2);
+    for (let i = 0; i < position.count; i++) for (let j = 0; j < 4; j++) {
+      const group = region[skinIndex.getComponent(i, j)];
+      if (group >= 0) weights[2 * i + group] += skinWeight.getComponent(i, j);
+    }
+    geometry.setAttribute('outfitWeight', new T.BufferAttribute(weights, 2));
+  }
+  if (outfitMaterials.has(material)) { mesh.material = outfitMaterials.get(material); return; }
+  const styled = material.clone();
+  styled.onBeforeCompile = (shader) => {
+    shader.uniforms.outfitTop = { value: new T.Color(av.jacket) };
+    shader.uniforms.outfitPants = { value: new T.Color(av.pants) };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec2 outfitWeight;\nvarying vec2 vOutfitWeight;\nvarying vec3 vOutfitPosition;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvOutfitWeight = outfitWeight;\nvOutfitPosition = position;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+varying vec2 vOutfitWeight;
+varying vec3 vOutfitPosition;
+uniform vec3 outfitTop;
+uniform vec3 outfitPants;
+float threadWave(float x) {
+  return sin(x * 6.2831853) * (1.0 - smoothstep(0.18, 0.7, fwidth(x)));
+}`)
+      .replace('#include <map_fragment>', `#include <map_fragment>
+  vec3 p = vOutfitPosition;
+  float h = p.y / ${av.height.toFixed(3)};
+  float top = smoothstep(0.4, 0.85, vOutfitWeight.x) * smoothstep(0.48, 0.58, h) * (1.0 - smoothstep(0.81, 0.85, h));
+  float pants = smoothstep(0.4, 0.85, vOutfitWeight.y) * smoothstep(0.12, 0.18, h) * (1.0 - smoothstep(0.48, 0.55, h));
+  // Preserve the painted safety vest and existing light and dark garment details.
+  vec3 base = diffuseColor.rgb;
+  float luma = dot(base, vec3(0.2126, 0.7152, 0.0722));
+  float vest = ${av.fabric === 0 ? 'smoothstep(0.23, 0.44, base.r - base.g)' : '0.0'};
+  vec3 topColor = outfitTop * clamp(0.57 + luma * 4.0, 0.66, 1.55);
+  vec3 pantColor = outfitPants * clamp(0.66 + luma * 4.0, 0.70, 1.45);
+  diffuseColor.rgb = mix(base, topColor, top * (1.0 - vest) * 0.65);
+  diffuseColor.rgb = mix(diffuseColor.rgb, pantColor, pants * 0.68);
+  float u = p.x + p.z * 0.62;
+  float weave = threadWave(u * 160.0) * threadWave(p.y * 200.0);
+  float pattern = ${[
+    '0.06 * threadWave(u * 15.0 + p.y * 9.0)',
+    '0.05 * threadWave(u * 26.0 - p.y * 22.0)',
+    '0.14 * threadWave(u * 12.0) * threadWave(p.y * 12.0)',
+    '-0.19 * pow(max(0.0, threadWave(p.y * 19.0)), 9.0)',
+    '-0.08 * pow(max(0.0, threadWave(u * 42.0) + threadWave(p.y * 42.0)) * 0.5, 5.0)',
+    '0.07 * threadWave(p.y * 16.0 + u * 5.0)',
+  ][av.fabric]};
+  diffuseColor.rgb *= 1.0 + top * (pattern + weave * 0.08) + pants * weave * 0.06;`)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.92, max(top, pants));');
+  };
+  styled.customProgramCacheKey = () => `outfit-1-${av.id}`;
+  outfitMaterials.set(material, styled);
+  mesh.material = styled;
+}
 /** Hats, buns and braids from the built heads, sized to fit the real head. */
 function accessories(av, k) {
   const parts = [], C = (h) => new T.Color(h);
@@ -351,7 +427,7 @@ function accessories(av, k) {
 function attachBody(person, gltf, motion) {
   const { av, rg, group } = person;
   const model = cloneScene(gltf.scene), tb = byName(model);
-  const mesh = []; model.traverse((o) => { if (o.isSkinnedMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; mesh.push(o); } });
+  const mesh = []; model.traverse((o) => { if (o.isSkinnedMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; styleOutfit(o, av); mesh.push(o); } });
   const ext = (model.getObjectByName('character') || model).userData || {};
   // the motion rig: a hidden copy of the capture skeleton, scaled to the person
   const src = cloneScene(motion.scene); src.visible = false; const sb = {};
