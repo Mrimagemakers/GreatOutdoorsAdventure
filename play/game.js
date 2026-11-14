@@ -2306,9 +2306,10 @@ function placeWheels(dt, inp, nvf, grip, pitch, roll) {
 function physics(dt) {
   if ($('settings').classList.contains('open') || mapOpen() || window.GOAExtension?.isOpen() || window.GOALocations?.isOpen() || window.GOAWildlife?.isOpen() || window.GOACampLife?.isOpen() || window.GOAXR?.isOpen() || $('board').style.display==='block' || window.GOADriveUI?.isOpen()) return {vf:0,speed:Math.hypot(S.vx,S.vz),sliding:false};
   const pad = window.GOAXR?.driveInput?.() || window.GOAController?.input() || {}; // VR controllers drive through the same input
+  const cb = window.GOACardboard?.driveInput?.() || {}; // phone VR viewer: hold to go, tilt to steer, or Watch autopilot
   const inp = S.ctrl && !$('settings').classList.contains('open') && !mapOpen() ? {
-    g: Math.max(keys.g || 0, touch.g, pad.throttle || 0), b: Math.max(keys.b || 0, touch.b, pad.brake || 0), d: P.handbrake ? Math.max(keys.d || 0, touch.d, pad.handbrake || 0) : 0,
-    st: clamp((Math.max(keys.r || 0, touch.r) - Math.max(keys.l || 0, touch.l)) + (pad.steer || 0) + (window.GOATouch?.steer?.() || 0), -1, 1), n: Math.max(keys.n || 0, touch.n, pad.nitro || 0),
+    g: Math.max(keys.g || 0, touch.g, pad.throttle || 0, cb.throttle || 0), b: Math.max(keys.b || 0, touch.b, pad.brake || 0, cb.brake || 0), d: P.handbrake ? Math.max(keys.d || 0, touch.d, pad.handbrake || 0) : 0,
+    st: clamp((Math.max(keys.r || 0, touch.r) - Math.max(keys.l || 0, touch.l)) + (pad.steer || 0) + (window.GOATouch?.steer?.() || 0) + (cb.steer || 0), -1, 1), n: Math.max(keys.n || 0, touch.n, pad.nitro || 0),
   } : { g: 0, b: 0, d: 0, st: 0, n: 0 };
   if (S.crash > 0) return crashStep(dt);
   if (S.air) return airStep(dt, inp);
@@ -2900,6 +2901,7 @@ function frame(now,xrFrame) {
   const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now; clockT += dt;
   if(window.GOAXR?.active()){if(window.GOAXR.previewActive())window.GOAController?.poll(dt);window.GOAXR.frame(dt,clockT,xrFrame);return;}
   window.GOAController?.poll(dt);
+  window.GOACardboard?.pre(dt);
   if (S.started) {
     if (window.GOAPlayer?.onFoot()) { window.GOAPlayer.update(dt); }
     else { for (let i = 0; i < 2; i++) { const r = physics(dt / 2); if (r) st = r; } }
@@ -2959,7 +2961,8 @@ function frame(now,xrFrame) {
     lu.uSunCol.value.copy(live.sun);
     lu.uRays.value = P.sunRays ? 0.55 * (1 - W.over * 0.6) : 0;
   }
-  if (composer) composer.render(); else renderer.render(scene, camera);
+  if (window.GOACardboard?.active() && window.GOACardboard.render(renderer, scene, camera, dt)) { /* drawn as two eyes for a phone viewer */ }
+  else if (composer) composer.render(); else renderer.render(scene, camera);
   if (pf) { const t5 = performance.now(); pf.push([t0 - now, t1 - t0, t2 - t1, t3 - t2, t4 - t3, t5 - t4].map(Math.round).join('/')); }
 }
 function begin() {
@@ -3066,6 +3069,7 @@ async function boot() {
    tickVR(dt,time){updateEnv(dt,time);updateTreeRange();updateNear3D();updateGrass(S.x,S.z,false);updateBirds(dt,time);window.GOAWildlife?.frame(dt,time);window.GOACampLife?.frame(dt,time);window.GOASurvival?.frame(dt);},
    physicsStep(dt){if(window.GOAPlayer?.onFoot())return;for(let i=0;i<2;i++)physics(dt/2);},player(){return window.GOAPlayer;},resetCar(){resetCar(false);}
   });
+  try{window.GOACardboard?.init({renderer,scene,camera,S,P,nearestRoad,resetCar});}catch(error){console.warn('Phone viewer mode unavailable',error);}
   try{window.GOAWildlife?.init({scene,camera,S,P,keys,WATER,groundY,terrainH,nearestRoad,toast,openSettings,openMap,snow(){return SV.snow;},viewPos(){return cameraWorldPosition();}});}catch(error){console.warn('Wildlife unavailable',error);}
   const outdoorHooks={scene,camera,renderer,S,P,keys,WATER,TX,groundY,terrainH,nearestRoad,toast,openSettings,openMap,setPref,panelsOpen,
    snow(){return SV.snow;},night(){return P.tod==='night';},viewPos(){return cameraWorldPosition();},snapCamera(){updateCamera(0,true);},

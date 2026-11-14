@@ -21,6 +21,22 @@ Connect a headset and use a browser that supports immersive WebXR VR. Choose **E
 - **Walk & hunt on foot**: left stick walks where you look (click it to sprint), right stick turns (snap 30° by default, or smooth), right trigger fires (or casts and reels with the rod), A interacts (tag, cook, open caches, fill canteen…) and **gets in the truck** at the Drive prompt, X reloads, Y switches weapon / rod / hatchet / knife, B opens the menu. Your weapon is held in your right hand; the wrist display shows ammunition, health, Survival needs and the current prompt.
 - **Lookout (paused)** is the original stationary viewpoint; River Valley and Snowy Mountain jump there.
 
+## Phone VR viewers (Google Cardboard and 360° video headsets)
+
+Any basic viewer that holds a phone works, with or without a button. No WebXR is needed, so iPhone works too.
+
+1. On your phone, open the game and tap **🥽 Phone VR viewer** on the title screen (or Pause → VR / AR → **Play in a phone viewer**). Allow motion access if asked.
+2. Turn the phone sideways and slide it into the viewer. Face forward; the view centres itself.
+
+- **Driving:** hold the screen (or press the viewer's button) to accelerate, let go to coast. Tilt your head left or right like a steering wheel.
+- **Watch:** look down at your feet and choose **Watch**. The truck drives the valley by itself, so you only look around. Choose **Take the wheel** to drive again.
+- **On foot:** look to aim (the white ring is your crosshair). Tap to fire, cast or use what you're looking at. Hold to walk where you look.
+- **Menu:** look down at your feet. Look at an option and tap, or keep looking at it until the gold ring fills. Options: Watch, Walk & hunt, Drive, View (chase or driver seat), Back on road, Switch, Reload, Recentre, Exit.
+- **Look around (no viewer):** the same thing on the plain screen. Move the phone to look.
+- A Bluetooth Xbox or PlayStation controller works on top of all this.
+
+There is no lens-distortion correction, so edges look slightly curved in some viewers. Sound and effects are the same; the bloom and lens effects are switched off to keep the frame rate up.
+
 ## Hunt in augmented reality
 
 Choose **Hunt in AR** on a phone or headset that supports immersive AR. Move slowly until the gold ring appears on the floor and tap (or pull the trigger) to release a deer, elk, fox, hare, coyote and bear around that spot. Tap the screen to fire at the crosshair (headsets fire along the controller). Animals wander, notice you when you get close, scatter at a shot and lie down when harvested, and new ones replace them. **Smaller / Larger / Life size** change their scale. Uses your outfitter weapon. Squeeze or Exit to finish.

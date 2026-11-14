@@ -46,6 +46,10 @@ Retexture: ground and roads now use a matching normal map per surface (grass, dr
 
 Xbox and PlayStation controllers also work inside VR on your headset or VR PC. See `XR-GUIDE.md` for the button layout. You aim by looking.
 
+## Phone VR viewers (Cardboard)
+
+Hold the screen to go, tilt your head to steer. On foot: look to aim, tap to fire or use, hold to walk. Look down for the menu (Watch drives for you). Full guide: XR-GUIDE.md.
+
 ## Phones and tablets
 
 The touch buttons appear automatically on phones and tablets (Settings › Touch can force them on or off, and make them smaller or larger). Landscape works best.
