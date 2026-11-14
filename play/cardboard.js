@@ -154,7 +154,7 @@ let hover = null, dwell = 0;
 function render(renderer, scene, camera, dt) {
   if (!on) return false;
   const foot = !!window.GOAPlayer?.onFoot?.(), S = G.S;
-  let baseYaw;
+  let baseYaw, tilt = 0;
   if (foot) {
     const st = window.GOAPlayer.state, p = window.GOAPlayer.position();
     baseYaw = footBase;
@@ -162,9 +162,9 @@ function render(renderer, scene, camera, dt) {
     camera.position.set(p.x + Math.sin(f) * 0.16, p.y + 1.58, p.z + Math.cos(f) * 0.16);
     camera.quaternion.copy(qY.setFromAxisAngle(yAxis, footBase + Math.PI)).multiply(rel);
   } else {
-    baseYaw = S.yaw;
+    baseYaw = S.yaw; tilt = G.P.camMode === 2 ? 0 : 0.16;
     // keep the game's chase or seat position, but the view belongs to your head, levelled to the car's heading
-    camera.quaternion.copy(qY.setFromAxisAngle(yAxis, S.yaw + Math.PI)).multiply(q0.setFromAxisAngle(new T.Vector3(1, 0, 0), G.P.camMode === 2 ? 0 : -0.16)).multiply(rel);
+    camera.quaternion.copy(qY.setFromAxisAngle(yAxis, S.yaw + Math.PI)).multiply(q0.setFromAxisAngle(new T.Vector3(1, 0, 0), -tilt)).multiply(rel);
   }
   camera.fov = stereo ? 84 : 68; camera.near = Math.min(camera.near, 0.08); camera.updateProjectionMatrix();
   camera.updateMatrixWorld(true);
@@ -176,7 +176,7 @@ function render(renderer, scene, camera, dt) {
   menu.visible = !!menuOpen;
   let picked = null;
   if (menuOpen) {
-    const fx = Math.sin(baseYaw), fz = Math.cos(baseYaw), a = 58 * deg, d = 2.1;
+    const fx = Math.sin(baseYaw), fz = Math.cos(baseYaw), a = 58 * deg + tilt, d = 2.1;
     menu.position.set(cp.x + fx * d * Math.cos(a), cp.y - d * Math.sin(a), cp.z + fz * d * Math.cos(a));
     menu.lookAt(cp); menu.updateMatrixWorld(true);
     ray.set(cp, v1); const hit = ray.intersectObjects(items, false)[0]; picked = hit?.object || null;
@@ -315,6 +315,6 @@ window.GOACardboard = {
   driveInput: () => on && !window.GOAPlayer?.onFoot?.() ? drive : null,
   /** For tests and desktop: set the head pose in radians. */
   _head(yaw, pitch, roll = 0) { manual = { yaw, pitch, roll }; },
-  _tap() { tapQueued = true; }, _hold(v) { down = !!v; held = !!v; if (!v) window.GOAPlayer?.touch?.move(0, 0, false); },
+  _tap() { tapQueued = true; }, _menu: () => ({ open: !!menuOpen, hover: hover?.userData.id || null, pitch: head.pitch, yaw: head.yaw }), _hold(v) { down = !!v; held = !!v; if (!v) window.GOAPlayer?.touch?.move(0, 0, false); },
 };
 })();
